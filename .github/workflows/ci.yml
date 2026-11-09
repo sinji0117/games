@@ -58,6 +58,39 @@ jobs:
       - name: pnpm-lock.yaml 출력 (로그에서 꺼내 커밋하기 위함)
         run: echo "LOCKFILE pnpm $(gzip -9c pnpm-lock.yaml | base64 -w0)"
 
+  release:
+    name: Rpanel 빌드 스크립트 · 실행 확인
+    runs-on: ubuntu-latest
+    needs: [rust, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rpanel 과 같은 방식으로 빌드 (작업 폴더 …/apps/<slug>/repo 흉내)
+        run: |
+          mkdir -p "$RUNNER_TEMP/apps/games-ci"
+          ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/apps/games-ci/repo"
+          cd "$RUNNER_TEMP/apps/games-ci/repo"
+          bash scripts/build-release.sh
+          ls -l target/release/game-api target/release/games target/release/games-ci
+      - name: PORT 만 주고 실행해서 화면 · API 확인
+        run: |
+          PORT=4100 ./target/release/game-api > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4100/api/health > /dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:4100/api/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:4100/api/health/deps | tee /dev/stderr | grep -q '"db":false'
+          curl -fsS http://127.0.0.1:4100/ | grep -q '<div id="root">'
+          curl -fsSI http://127.0.0.1:4100/ | grep -qi 'cache-control: no-cache'
+          asset=$(curl -fsS http://127.0.0.1:4100/ | grep -o '/assets/[^"]*\.js' | head -1)
+          curl -fsSI "http://127.0.0.1:4100$asset" | grep -qi 'immutable'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4100/api/nope)" = 404
+          # 루프백에만 열렸는지
+          ! curl -fsS --max-time 2 "http://$(hostname -I | awk '{print $1}'):4100/api/health" > /dev/null 2>&1
+          cat server.log
+
   docker:
     name: Docker 이미지 빌드
     runs-on: ubuntu-latest

@@ -73,7 +73,7 @@ impl EventBus {
         if let Some(r) = &self.redis {
             match serde_json::to_string(&ev) {
                 Ok(payload) => {
-                    if let Err(e) = r.publish(&channel(game, id), &payload).await {
+                    if let Err(e) = r.publish(&r.key(&channel(game, id)), &payload).await {
                         tracing::debug!(error = %e, "redis publish 실패 — 이 서버 접속자에게만 전달");
                     }
                 }
@@ -89,12 +89,17 @@ async fn forward_from_redis(bus: Arc<EventBus>) {
     let mut backoff = Duration::from_secs(1);
     loop {
         match redis.client().get_async_pubsub().await {
-            Ok(mut pubsub) => match pubsub.psubscribe("room:*").await {
+            // ACL 채널 권한(`&mg:*`)은 PSUBSCRIBE 패턴을 글자 그대로 비교하므로 접두사 전체(`mg:*`)로 구독하고 이름으로 거름
+            Ok(mut pubsub) => match pubsub.psubscribe(redis.key("*")).await {
                 Ok(()) => {
-                    tracing::info!("redis room:* 구독 시작");
+                    tracing::info!(pattern = %redis.key("*"), "redis 방 알림 구독 시작");
+                    let room_prefix = redis.key("room:");
                     backoff = Duration::from_secs(1);
                     let mut stream = pubsub.on_message();
                     while let Some(msg) = stream.next().await {
+                        if !msg.get_channel_name().starts_with(&room_prefix) {
+                            continue;
+                        }
                         let Ok(payload) = msg.get_payload::<String>() else {
                             continue;
                         };

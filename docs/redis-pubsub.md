@@ -1,11 +1,15 @@
 # Redis 활용 전략
 
 ## 키 설계
+모든 키와 채널 앞에 `REDIS_KEY_PREFIX`(기본 `mg:`)가 붙습니다. 아래 표는 접두사를 뺀 이름입니다.
+Rpanel 에서 Redis 계정을 따로 만들 때 키 패턴을 `mg:*` 로 두면 키(`~mg:*`)와 채널(`&mg:*`) 권한이 함께 맞습니다.
+Pub/Sub 채널은 DB 번호와 상관없이 서버 전체에서 공유되므로, 한 Redis 를 여러 앱이 쓰면 앱마다 접두사를 다르게 둡니다.
+
 | 키 | 타입 | TTL | 용도 |
 | --- | --- | --- | --- |
 | `game:{kind}:{id}` | Hash `v`·`d`·`e` | `EXPIREAT` | ✅ 진행 중 방 상태. `v` 버전, `d` JSON(스냅샷·시드·논스·방장 토큰 해시), `e` 만료 시각 |
 | `game:{kind}:{id}:events` | Stream | 24h | 방 이벤트 로그 (재접속 시 이어받기) |
-| `room:{game}:{id}` | Pub/Sub 채널 | - | ✅ 방 변경 알림. 서버마다 `PSUBSCRIBE room:*` 연결 하나 |
+| `room:{game}:{id}` | Pub/Sub 채널 | - | ✅ 방 변경 알림. 서버마다 `PSUBSCRIBE mg:*` 연결 하나 (ACL 이 PSUBSCRIBE 패턴을 글자 그대로 비교하므로 접두사 전체로 구독하고 `mg:room:` 만 골라 씀) |
 | `rank:points:all` · `rank:points:week:{월요일}` | Sorted Set | 주간 15일 | ✅ 포인트 랭킹 캐시. 지급 시 키가 있으면 `ZINCRBY`, 실패하면 키 삭제 → 다음 조회 때 원장으로 다시 채움 |
 | `rl:{scope}:{ip}:{window}` | String(INCR) | 윈도 | ✅ 레이트 리밋 (`ladder_create` 20/분, `ladder_rung` 60/분) |
 

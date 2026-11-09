@@ -48,7 +48,7 @@ impl AppState {
     /// 설정대로 Redis · MariaDB 에 연결합니다. 연결에 실패한 저장소는 경고 후 건너뜁니다.
     pub async fn connect(config: &Config) -> Self {
         let redis = match &config.redis_url {
-            Some(url) => match RedisBackend::connect(url).await {
+            Some(url) => match RedisBackend::connect(url, &config.redis_key_prefix).await {
                 Ok(r) => {
                     tracing::info!("redis 연결됨");
                     Some(r)

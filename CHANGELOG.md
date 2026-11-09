@@ -2,6 +2,22 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.8.0] - 2026-11-10
+
+### Added
+- Rpanel Git 자동 배포 (gageyo 방식): `scripts/build-release.sh` 가 화면을 빌드해 `game-api` 바이너리에 내장하고 `작업 폴더/target/release/{game-api,games,앱 slug}` 에 놓음
+- 화면 내장: `crates/api/build.rs` 가 `apps/site/dist` 를 `include_bytes!` 목록으로 생성 (새 의존성 없음). `assets/*` 는 1년 immutable, 나머지는 no-cache, 없는 경로는 `index.html`, 빌드 전이면 503 안내
+- `GET /api/health/deps` → `{"db":bool,"redis":bool}`
+- `REDIS_KEY_PREFIX` (기본 `mg:`): 모든 Redis 키 · Pub/Sub 채널에 접두사 — Rpanel Redis 계정 키 패턴 `mg:*` 와 맞춤
+- 문서 `docs/deploy-rpanel.md`, `deploy/rpanel.env.example`
+- CI `release` 잡: Rpanel 작업 폴더를 흉내 내 빌드 스크립트 실행 → `PORT` 만 주고 켜서 화면 · 캐시 헤더 · 루프백 바인드 확인
+
+### Changed
+- 바인드 주소: `API_BIND` > `BIND_ADDR` > `127.0.0.1:$PORT` > `0.0.0.0:8080`
+- 클라이언트 IP: `X-Real-IP` 우선, 없으면 `X-Forwarded-For`. `TRUST_PROXY` 를 비우면 루프백에 열렸을 때 자동으로 신뢰
+- 방 알림 구독을 `PSUBSCRIBE {접두사}*` 로 (Redis ACL 이 PSUBSCRIBE 패턴을 글자 그대로 비교하므로) 하고 채널 이름으로 거름
+- Docker 이미지도 화면을 바이너리에 내장 (`STATIC_DIR` 는 선택 사항으로 남김)
+
 ## [0.7.0] - 2026-11-09
 
 ### Added

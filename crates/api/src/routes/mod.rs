@@ -14,6 +14,7 @@ mod ws;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(health::health))
+        .route("/api/health/deps", get(health::deps))
         .route("/api/rankings", get(rankings::rankings))
         .nest("/api/auth", auth::router())
         .nest("/api/ladder", ladder::router())

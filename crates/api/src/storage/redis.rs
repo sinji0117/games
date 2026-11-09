@@ -39,7 +39,12 @@ pub struct RedisBackend {
     insert: Script,
     cas: Script,
     hit: Script,
+    /// 모든 키 · 채널 앞에 붙는 접두사 (Rpanel Redis ACL 키 패턴 `mg:*` 용)
+    prefix: String,
 }
+
+/// 기본 키 접두사
+pub const DEFAULT_KEY_PREFIX: &str = "mg:";
 
 pub fn session_key(kind: GameKind, id: &str) -> String {
     format!("game:{}:{}", kind.as_str(), id)
@@ -47,7 +52,7 @@ pub fn session_key(kind: GameKind, id: &str) -> String {
 
 impl RedisBackend {
     /// 연결. 이후 끊기면 ConnectionManager 가 자동으로 다시 연결합니다.
-    pub async fn connect(url: &str) -> Result<Self, StoreError> {
+    pub async fn connect(url: &str, prefix: &str) -> Result<Self, StoreError> {
         let client =
             ::redis::Client::open(url).map_err(|e| StoreError::Unavailable(format!("redis url: {e}")))?;
         let conn = with_timeout("redis 연결", client.get_connection_manager()).await?;
@@ -57,7 +62,13 @@ impl RedisBackend {
             insert: Script::new(INSERT_LUA),
             cas: Script::new(CAS_LUA),
             hit: Script::new(HIT_LUA),
+            prefix: prefix.to_string(),
         })
+    }
+
+    /// 접두사를 붙인 실제 키 (채널 · 패턴에도 사용)
+    pub fn key(&self, k: &str) -> String {
+        format!("{}{}", self.prefix, k)
     }
 
     /// Pub/Sub 구독용 클라이언트 (구독은 전용 연결이 필요)
@@ -103,7 +114,7 @@ impl RedisBackend {
     /// 레이트 리밋 카운트 증가
     pub async fn hit(&self, rule: &Rule, who: &str, now: u64) -> Result<Decision, StoreError> {
         let mut conn = self.conn.clone();
-        let mut inv = self.hit.key(rule.key(who, now));
+        let mut inv = self.hit.key(self.key(&rule.key(who, now)));
         inv.arg(rule.window_secs);
         let count: u64 = with_timeout("redis 레이트 리밋", inv.invoke_async(&mut conn)).await?;
         Ok(rule.decide(count, now))
@@ -117,7 +128,7 @@ impl SessionBackend for RedisBackend {
 
     async fn insert(&self, s: StoredSession) -> Result<(), StoreError> {
         let mut conn = self.conn.clone();
-        let mut inv = self.insert.key(session_key(s.kind, &s.id));
+        let mut inv = self.insert.key(self.key(&session_key(s.kind, &s.id)));
         inv.arg(s.version).arg(s.data).arg(s.expires_at);
         let _: i64 = with_timeout("redis 세션 저장", inv.invoke_async(&mut conn)).await?;
         Ok(())
@@ -126,7 +137,10 @@ impl SessionBackend for RedisBackend {
     async fn get(&self, kind: GameKind, id: &str, now: u64) -> Result<Option<StoredSession>, StoreError> {
         let mut conn = self.conn.clone();
         let mut cmd = ::redis::cmd("HMGET");
-        cmd.arg(session_key(kind, id)).arg("v").arg("d").arg("e");
+        cmd.arg(self.key(&session_key(kind, id)))
+            .arg("v")
+            .arg("d")
+            .arg("e");
         let (v, d, e): (Option<u64>, Option<String>, Option<u64>) =
             with_timeout("redis 세션 조회", cmd.query_async(&mut conn)).await?;
         match (v, d, e) {
@@ -149,7 +163,7 @@ impl SessionBackend for RedisBackend {
         data: String,
     ) -> Result<Cas, StoreError> {
         let mut conn = self.conn.clone();
-        let mut inv = self.cas.key(session_key(kind, id));
+        let mut inv = self.cas.key(self.key(&session_key(kind, id)));
         inv.arg(expected).arg(data);
         let r: i64 = with_timeout("redis 세션 수정", inv.invoke_async(&mut conn)).await?;
         Ok(match r {
