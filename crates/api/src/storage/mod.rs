@@ -12,6 +12,7 @@
 pub mod mariadb;
 pub mod redis;
 pub mod results;
+pub mod scores;
 
 use std::time::Duration;
 

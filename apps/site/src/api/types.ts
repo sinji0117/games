@@ -108,3 +108,34 @@ export interface CreateBingoRequest {
   pool?: PoolSpec;
   target_lines?: number;
 }
+
+// ---------- 핀볼 ----------
+
+export interface PinballStart {
+  id: string;
+  seed: string;
+  table: string;
+  max_ticks: number;
+  ticks_per_second: number;
+}
+
+export interface PinballFinish {
+  score: number;
+  ticks: number;
+  game_over: boolean;
+  matches_client: boolean | null;
+  rank_today: number;
+  rank_all: number;
+}
+
+export interface PinballScoreEntry {
+  name: string;
+  score: number;
+  seconds: number;
+  created_at: number;
+}
+
+export interface PinballScores {
+  today: PinballScoreEntry[];
+  all: PinballScoreEntry[];
+}

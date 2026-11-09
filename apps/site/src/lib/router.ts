@@ -7,6 +7,7 @@ export type Route =
   | { name: "ladder-room"; id: string }
   | { name: "bingo-new" }
   | { name: "bingo-room"; id: string }
+  | { name: "pinball" }
   | { name: "not-found" };
 
 export function parseRoute(hash: string): Route {
@@ -14,6 +15,7 @@ export function parseRoute(hash: string): Route {
   if (path === "/") return { name: "lobby" };
   if (path === "/ladder/new") return { name: "ladder-new" };
   if (path === "/bingo/new") return { name: "bingo-new" };
+  if (path === "/pinball") return { name: "pinball" };
   const m = path.match(/^\/(ladder|bingo)\/([0-9a-f-]{36})$/i);
   if (m) return m[1] === "ladder" ? { name: "ladder-room", id: m[2] } : { name: "bingo-room", id: m[2] };
   return { name: "not-found" };

@@ -6,6 +6,7 @@ use crate::AppState;
 pub mod bingo;
 mod health;
 pub mod ladder;
+pub mod pinball;
 mod ws;
 
 pub fn router() -> Router<AppState> {
@@ -13,5 +14,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/health", get(health::health))
         .nest("/api/ladder", ladder::router())
         .nest("/api/bingo", bingo::router())
+        .nest("/api/pinball", pinball::router())
         .nest("/api/ws", ws::router())
 }

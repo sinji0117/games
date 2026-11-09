@@ -2,3 +2,4 @@
 
 pub mod bingo;
 pub mod ladder;
+pub mod pinball;
