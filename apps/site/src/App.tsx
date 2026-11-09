@@ -1,4 +1,7 @@
+import { AccountMenu } from "./components/AccountMenu.tsx";
 import { ThemeToggle } from "./components/ThemeToggle.tsx";
+import { LoginPage } from "./pages/LoginPage.tsx";
+import { RankingsPage } from "./pages/RankingsPage.tsx";
 import { useRoute } from "./lib/router.ts";
 import { Lobby } from "./pages/Lobby.tsx";
 import { LadderRoom } from "./pages/ladder/LadderRoom.tsx";
@@ -16,7 +19,10 @@ export function App() {
         <a href="#/" className="brand" aria-label="한판 홈">
           한판
         </a>
-        <ThemeToggle />
+        <div className="topbar__right">
+          <AccountMenu />
+          <ThemeToggle />
+        </div>
       </header>
       <main className="page">
         {route.name === "lobby" && <Lobby />}
@@ -25,6 +31,8 @@ export function App() {
         {route.name === "bingo-new" && <BingoSetup />}
         {route.name === "bingo-room" && <BingoRoom key={route.id} id={route.id} />}
         {route.name === "pinball" && <PinballSetup />}
+        {route.name === "login" && <LoginPage />}
+        {route.name === "rankings" && <RankingsPage />}
         {route.name === "pinball-race" && <PinballRace key={route.id} id={route.id} />}
         {route.name === "not-found" && (
           <section className="empty">

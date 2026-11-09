@@ -1,6 +1,6 @@
 # Games — 멀티 미니게임 플랫폼
 
-![version](https://img.shields.io/badge/version-0.6.1-blue) ![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)
+![version](https://img.shields.io/badge/version-0.7.0-blue) ![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)
 
 사다리 · 빙고 · 핀볼 룰렛 같은 미니게임을 한곳에서 즐기고, 방 생성 · 실시간 승패 기록 · 포인트/랭킹을 제공하는 아케이드 플랫폼입니다.
 `정비로` 플랫폼 아키텍처(Rust Axum + React 19/Vite + MariaDB + Redis 7, 모노레포)를 계승합니다.
@@ -14,7 +14,7 @@
 | 3 | MariaDB 영구 저장 · Redis 세션 · 폴백 · 레이트 리밋 | ✅ 0.3.0 |
 | 4 | 빙고 엔진 + 실시간 방 동기화 (Redis Pub/Sub · WebSocket) | ✅ 0.4.0 |
 | 5 | 핀볼 룰렛 (마블 룰렛 형식, 결정적 물리 엔진 + 서버 확정 결과 검증) | ✅ 0.6.0 |
-| 6 | 계정 · 포인트 · 랭킹(Redis Sorted Set) · 배포 | ⏳ 다음 |
+| 6 | 계정 · 포인트 · 랭킹(Redis Sorted Set) · Docker 배포 · CI | ✅ 0.7.0 |
 
 > 랭킹은 "누구의 기록인가"가 정해져야 의미가 있어 계정과 함께 6단계로 옮겼습니다.
 
@@ -64,6 +64,14 @@ curl -X POST localhost:8080/api/ladder/games \
   -H 'content-type: application/json' \
   -d '{"participants":["철수","영희","민수"],"outcomes":["꽝","당첨","커피"]}'
 ```
+
+## 배포
+
+```bash
+cp deploy/env.production.example .env.production   # 비밀번호 바꾸기
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+컨테이너 하나가 API 와 프론트엔드를 함께 서빙합니다(127.0.0.1:8080). 리버스 프록시 설정은 [deploy/nginx.conf](deploy/nginx.conf), 자세한 내용은 [docs/deployment.md](docs/deployment.md).
 
 ## 버전 관리
 

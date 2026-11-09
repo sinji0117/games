@@ -11,7 +11,9 @@
 | `invalid_input` | 422 |
 | `invalid_state` | 409 |
 | `not_found` | 404 |
+| `unauthorized` | 401 (로그인 필요 · 로그인 실패) |
 | `forbidden` | 403 (방장·참가자 권한 없음, `message` 에 사유) |
+| `conflict` | 409 (아이디 중복 등) |
 | `busy` | 409 (같은 방 동시 수정 충돌이 재시도 한도 초과) |
 | `rate_limited` | 429 (`Retry-After` 헤더) |
 | `unavailable` | 503 (저장소 연결 불가, `Retry-After: 5`) |
@@ -171,5 +173,39 @@
 - 브라우저는 `Race(map, marbles.length, skills, seed)` 를 재생해 `ranking` 과 같은지 확인
 - 레이트 리밋: 만들기 IP 당 30/분
 
-## 예정
-- 6단계: `/api/auth/*`, `/api/rankings/{game}`
+## 계정
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| POST | `/api/auth/signup` | `{ "username", "password" }` → 201 `{ token, expires_at, user }` (409 아이디 중복) |
+| POST | `/api/auth/login` | 같은 본문 → 200 같은 응답 (401 틀림) |
+| POST | `/api/auth/logout` | 토큰 무효화 → 204 |
+| GET | `/api/auth/me` | `{ user, daily_bonus }` — 오늘(KST) 처음 부르면 방문 포인트 지급 |
+
+- 로그인이 필요한 요청은 `Authorization: Bearer <token>`. 토큰은 30일 유효, 서버에는 sha256 해시만 저장
+- 아이디 2~20자(한글·영문·숫자·밑줄, 대소문자 구분 없이 고유), 비밀번호 8~128자(argon2id)
+- 게임은 로그인 없이도 됩니다. 로그인한 상태로 빙고 방 만들기·참가, 사다리 결과 공개, 핀볼 룰렛 만들기를 하면 포인트가 쌓입니다
+- 레이트 리밋: 가입 IP 당 10분에 5회, 로그인 1분에 10회
+- `user`: `{ id, username, points, created_at }`
+
+## 랭킹 — `GET /api/rankings?period=week|all`
+```json
+{
+  "period": "week", "week": "2026-11-09", "since": 1794150000,
+  "top": [{ "rank": 1, "user_id": 3, "username": "민지", "points": 340 }],
+  "me": { "rank": 7, "points": 120 }
+}
+```
+- 상위 20명, 같은 점수는 같은 순위. `me` 는 로그인했고 점수가 있을 때만
+- 주간은 KST 월요일 0시부터
+
+### 포인트 (`game_core::points::Reason`)
+| 사유 | 점수 | 대상 |
+| --- | --- | --- |
+| `daily` 오늘 첫 방문 | 20 | KST 날짜 |
+| `bingo_play` 빙고 참가 (끝까지) | 10 | 빙고 id |
+| `bingo_win` 빙고 우승 | 50 | 빙고 id |
+| `ladder_host` 사다리 결과 공개 | 5 | 사다리 id |
+| `roulette` 핀볼 룰렛 만들기 | 5 | 룰렛 id |
+
+같은 (사용자, 사유, 대상) 은 한 번만 (원장 고유키).

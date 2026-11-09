@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "game-api"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "axum",
  "futures-util",
@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "game-core"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "serde",
 ]

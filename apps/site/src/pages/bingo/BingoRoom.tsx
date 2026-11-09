@@ -5,6 +5,7 @@ import { LiveBadge } from "../../components/LiveBadge.tsx";
 import { shuffledBoard } from "../../lib/bingo/engine.ts";
 import { verifyBingo, type BingoVerifyReport } from "../../lib/bingo/verify.ts";
 import { loadBingoIdentity, saveBingoIdentity, type BingoIdentity } from "../../lib/storage.ts";
+import { useAuth } from "../../lib/auth.tsx";
 import { useRoomEvents } from "../../lib/useRoomEvents.ts";
 import { BingoBoard } from "./BingoBoard.tsx";
 
@@ -37,6 +38,13 @@ export function BingoRoom({ id }: { id: string }) {
   useEffect(() => {
     if (view?.reveal) verifyBingo(view).then(setReport, () => setReport(null));
   }, [view]);
+
+  // 끝나면 참가·우승 포인트가 반영된 내 점수를 다시 불러옴
+  const { refresh: refreshMe } = useAuth();
+  const finishedNow = view?.phase === "finished";
+  useEffect(() => {
+    if (finishedNow) void refreshMe();
+  }, [finishedNow, refreshMe]);
 
   const called = useMemo(() => new Set(view?.calls.map((c) => c.value) ?? []), [view]);
 

@@ -6,7 +6,10 @@ import type {
   CreatedLadder,
   JoinedBingo,
   LadderView,
+  MeView,
+  RankingView,
   RouletteView,
+  SessionView,
 } from "./types.ts";
 import type { RouletteConfig } from "../lib/pinball/engine.ts";
 
@@ -22,12 +25,22 @@ export class ApiError extends Error {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
+// 로그인 토큰. lib/auth.tsx 가 설정하고, 모든 요청에 Authorization 으로 붙습니다.
+let authToken: string | null = null;
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
 async function request<T>(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
   let res: Response;
   try {
     res = await fetch(BASE + path, {
       method,
-      headers: { "content-type": "application/json", ...headers },
+      headers: {
+        "content-type": "application/json",
+        ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
+        ...headers,
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -67,4 +80,12 @@ export const bingoApi = {
 export const pinballApi = {
   create: (config: RouletteConfig) => request<RouletteView>("POST", "/api/pinball/games", config),
   get: (id: string) => request<RouletteView>("GET", `/api/pinball/games/${id}`),
+};
+
+export const authApi = {
+  signup: (username: string, password: string) => request<SessionView>("POST", "/api/auth/signup", { username, password }),
+  login: (username: string, password: string) => request<SessionView>("POST", "/api/auth/login", { username, password }),
+  logout: () => request<null>("POST", "/api/auth/logout"),
+  me: () => request<MeView>("GET", "/api/auth/me"),
+  rankings: (period: "week" | "all") => request<RankingView>("GET", `/api/rankings?period=${period}`),
 };
