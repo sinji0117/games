@@ -1,0 +1,33 @@
+import { ThemeToggle } from "./components/ThemeToggle.tsx";
+import { useRoute } from "./lib/router.ts";
+import { Lobby } from "./pages/Lobby.tsx";
+import { LadderRoom } from "./pages/ladder/LadderRoom.tsx";
+import { LadderSetup } from "./pages/ladder/LadderSetup.tsx";
+
+export function App() {
+  const route = useRoute();
+  return (
+    <div className="shell">
+      <header className="topbar">
+        <a href="#/" className="brand" aria-label="한판 홈">
+          한판
+        </a>
+        <ThemeToggle />
+      </header>
+      <main className="page">
+        {route.name === "lobby" && <Lobby />}
+        {route.name === "ladder-new" && <LadderSetup />}
+        {route.name === "ladder-room" && <LadderRoom key={route.id} id={route.id} />}
+        {route.name === "not-found" && (
+          <section className="empty">
+            <h1>없는 페이지예요</h1>
+            <p>주소를 다시 확인하거나 게임 목록으로 돌아가세요.</p>
+            <a className="btn btn--primary" href="#/">
+              게임 목록으로
+            </a>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

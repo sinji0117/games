@@ -7,7 +7,10 @@
 - 사용자에게 보이는 메시지는 한국어, 코드 식별자·에러 코드는 영어 snake_case.
 
 ## 프론트엔드
-- 색상·간격은 `packages/ui/src/ui.css` 토큰만 사용 (하드코딩 금지), 라이트/다크 모두 확인
+- 색상·간격은 `packages/ui/src/ui.css` 토큰만 사용 (하드코딩 금지), 라이트(모눈종이)/다크(칠판) 모두 확인
+- 서버와 같은 계산이 필요한 로직은 `src/lib/` 에 순수 함수로 두고 `node --test` 로 테스트 (React 의존 금지)
+- 라우팅은 의존성 없는 해시 라우터(`src/lib/router.ts`), 외부 상태 라이브러리 없이 시작
+- `localStorage` 는 `src/lib/storage.ts` 를 통해서만 (예외 처리 포함)
 - API 타입은 `docs/api.md` 와 일치시킵니다.
 
 ## 버전

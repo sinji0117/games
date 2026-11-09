@@ -20,7 +20,11 @@ struct Body<'a> {
 #[derive(Serialize)]
 struct Inner<'a> {
     code: &'a str,
+    /// 사용자에게 그대로 보여줄 수 있는 문장
     message: String,
+    /// 입력 오류일 때 문제가 된 필드
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field: Option<&'a str>,
 }
 
 impl From<GameError> for ApiError {

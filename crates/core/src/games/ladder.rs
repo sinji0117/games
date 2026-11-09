@@ -103,6 +103,8 @@ pub struct LadderGame {
     participants: Vec<String>,
     outcomes: Vec<String>,
     rows: usize,
+    /// 생성에 쓴 가로선 확률. 클라이언트 재현 검증에 필요합니다.
+    density: f64,
     /// `grid[row * gaps + col]`
     grid: Vec<Option<RungSource>>,
     phase: GamePhase,
@@ -160,12 +162,13 @@ impl LadderGame {
         Ok((participants, outcomes, rows, density))
     }
 
-    fn empty(participants: Vec<String>, outcomes: Vec<String>, rows: usize) -> Self {
+    fn empty(participants: Vec<String>, outcomes: Vec<String>, rows: usize, density: f64) -> Self {
         let gaps = participants.len() - 1;
         Self {
             participants,
             outcomes,
             rows,
+            density,
             grid: vec![None; rows * gaps],
             phase: GamePhase::Lobby,
             results: Vec::new(),
@@ -174,8 +177,8 @@ impl LadderGame {
 
     /// 지정한 가로선으로 사다리를 만듭니다 (테스트·리플레이용). 모든 가로선을 검증합니다.
     pub fn with_rungs(config: LadderConfig, rungs: &[Rung]) -> GameResult<Self> {
-        let (p, o, rows, _) = Self::validate(&config)?;
-        let mut game = Self::empty(p, o, rows);
+        let (p, o, rows, density) = Self::validate(&config)?;
+        let mut game = Self::empty(p, o, rows, density);
         for r in rungs {
             game.check_placeable(r.row, r.col)?;
             game.set(r.row, r.col, Some(r.source));
@@ -232,6 +235,10 @@ impl LadderGame {
 
     pub fn rows(&self) -> usize {
         self.rows
+    }
+
+    pub fn density(&self) -> f64 {
+        self.density
     }
 
     pub fn participants(&self) -> &[String] {
@@ -363,7 +370,7 @@ impl GameModule for LadderGame {
 
     fn create(config: LadderConfig, seed: u64) -> GameResult<Self> {
         let (p, o, rows, density) = Self::validate(&config)?;
-        let mut game = Self::empty(p, o, rows);
+        let mut game = Self::empty(p, o, rows, density);
         let mut rng = SeededRng::new(seed);
         game.generate(&mut rng, density);
         Ok(game)
@@ -453,6 +460,7 @@ mod tests {
         let a = LadderGame::create(cfg(6), 12345).unwrap();
         let b = LadderGame::create(cfg(6), 12345).unwrap();
         assert_eq!(a.rungs(), b.rungs());
+        assert_eq!(a.density(), DEFAULT_DENSITY);
         let c = LadderGame::create(cfg(6), 54321).unwrap();
         assert_ne!(a.rungs(), c.rungs());
     }
