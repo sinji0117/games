@@ -1,6 +1,6 @@
 # Games — 멀티 미니게임 플랫폼
 
-![version](https://img.shields.io/badge/version-0.6.0-blue)
+![version](https://img.shields.io/badge/version-0.6.1-blue) ![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)
 
 사다리 · 빙고 · 핀볼 룰렛 같은 미니게임을 한곳에서 즐기고, 방 생성 · 실시간 승패 기록 · 포인트/랭킹을 제공하는 아케이드 플랫폼입니다.
 `정비로` 플랫폼 아키텍처(Rust Axum + React 19/Vite + MariaDB + Redis 7, 모노레포)를 계승합니다.

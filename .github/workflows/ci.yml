@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust (fmt · clippy · test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+      - name: 핀볼·빙고·사다리 기준값이 최신인지
+        run: |
+          cargo run -q -p game-core --example ladder_fixtures | cmp - apps/site/src/lib/ladder/tests/rust-fixtures.json
+          cargo run -q -p game-core --example bingo_fixtures | cmp - apps/site/src/lib/bingo/tests/rust-fixtures.json
+          cargo run -q -p game-core --example pinball_fixtures | cmp - apps/site/src/lib/pinball/tests/rust-fixtures.json
+      - name: Cargo.lock 출력 (잠금 파일이 없을 때만, 로그에서 꺼내 커밋하기 위함)
+        if: hashFiles('Cargo.lock') == '' || github.event_name == 'pull_request'
+        run: echo "LOCKFILE cargo $(gzip -9c Cargo.lock | base64 -w0)"
+
+  web:
+    name: Web (typecheck · test · build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: install
+        run: |
+          if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install --no-frozen-lockfile; fi
+      - name: typecheck
+        run: pnpm -r typecheck
+      - name: test
+        run: pnpm -r test
+      - name: build
+        run: pnpm --filter @games/site build
+      - name: pnpm-lock.yaml 출력 (로그에서 꺼내 커밋하기 위함)
+        run: echo "LOCKFILE pnpm $(gzip -9c pnpm-lock.yaml | base64 -w0)"

@@ -2,6 +2,12 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.6.1] - 2026-11-09
+
+### Added
+- GitHub Actions CI: Rust `fmt`·`clippy -D warnings`·`test --workspace`, Rust↔TS 기준값 최신 여부, 웹 `typecheck`·`test`·`build`
+- `Cargo.lock`, `pnpm-lock.yaml` 커밋 (CI 에서 생성) — 처음으로 API 서버(axum 0.8.9 · sqlx 0.8.6 · redis 0.32.7)를 실제 컴파일하고 통합 테스트 통과 확인
+
 ## [0.6.0] - 2026-11-09
 
 ### Changed
