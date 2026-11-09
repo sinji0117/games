@@ -7,6 +7,7 @@ use sqlx::mysql::MySqlPool;
 use crate::config::Config;
 use crate::events::EventBus;
 use crate::ratelimit::Limiter;
+use crate::storage::accounts::AccountRepo;
 use crate::storage::results::ResultsRepo;
 use crate::storage::roulettes::RouletteRepo;
 use crate::storage::{mariadb, AnyBackend, MariaDbBackend, RedisBackend, SessionStore, MEMORY_MAX_SESSIONS};
@@ -17,6 +18,7 @@ pub struct AppState {
     pub sessions: Arc<SessionStore>,
     pub results: Arc<ResultsRepo>,
     pub roulettes: Arc<RouletteRepo>,
+    pub accounts: Arc<AccountRepo>,
     pub limiter: Arc<Limiter>,
     pub events: Arc<EventBus>,
     pub redis: Option<RedisBackend>,
@@ -88,6 +90,10 @@ impl AppState {
             Some(pool) => ResultsRepo::MariaDb(pool.clone()),
             None => ResultsRepo::memory(),
         };
+        let accounts = match &db {
+            Some(pool) => AccountRepo::MariaDb(pool.clone()),
+            None => AccountRepo::memory(),
+        };
         let roulettes = match &db {
             Some(pool) => RouletteRepo::MariaDb(pool.clone()),
             None => RouletteRepo::memory(),
@@ -96,6 +102,7 @@ impl AppState {
             sessions: Arc::new(sessions),
             results: Arc::new(results),
             roulettes: Arc::new(roulettes),
+            accounts: Arc::new(accounts),
             limiter: Arc::new(Limiter::new(redis.clone())),
             events: EventBus::new(redis.clone()),
             redis,

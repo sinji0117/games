@@ -5,6 +5,7 @@ import { makeLayout, polylineLength, toPx } from "../../lib/ladder/geometry.ts";
 import { verifyLadder, type VerifyReport } from "../../lib/ladder/verify.ts";
 import { hostTokenKey, load } from "../../lib/storage.ts";
 import { useRoomEvents } from "../../lib/useRoomEvents.ts";
+import { useAuth } from "../../lib/auth.tsx";
 import { LiveBadge } from "../../components/LiveBadge.tsx";
 import { LadderBoard, laneColor } from "./LadderBoard.tsx";
 import { usePathAnimation } from "./usePathAnimation.ts";
@@ -20,6 +21,7 @@ export function LadderRoom({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const [report, setReport] = useState<VerifyReport | null>(null);
   const hostToken = useMemo(() => load(hostTokenKey(id)), [id]);
+  const { refresh: refreshMe } = useAuth();
 
   const refresh = useCallback(async () => {
     try {
@@ -86,6 +88,7 @@ export function LadderRoom({ id }: { id: string }) {
     setNotice(null);
     try {
       setView(await ladderApi.reveal(id, hostToken));
+      void refreshMe();
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "결과를 공개하지 못했습니다.");
     } finally {

@@ -1,0 +1,52 @@
+# 운영 배포: docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# .env.production 예시는 deploy/env.production.example
+services:
+  app:
+    build: .
+    image: games:${APP_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://games:${DB_PASSWORD:?DB_PASSWORD 필요}@mariadb:3306/games
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-}
+      TRUST_PROXY: "true"
+      SESSION_TTL_SECS: ${SESSION_TTL_SECS:-86400}
+      RUST_LOG: ${RUST_LOG:-info}
+    # 리버스 프록시(nginx · Rpanel)만 접근하도록 로컬에만 엽니다
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: games
+      MARIADB_USER: games
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 필요}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD 필요}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 30
+
+volumes:
+  mariadb-data:
+  redis-data:

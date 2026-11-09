@@ -1204,3 +1204,159 @@ button.board__name:hover {
     animation: none;
   }
 }
+
+/* 계정 */
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account__who {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.account__who strong {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 16px;
+  background: linear-gradient(transparent 55%, color-mix(in srgb, var(--c-lane-1) 75%, transparent) 55%);
+}
+
+.toast {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--c-ink);
+  border-radius: var(--radius-sm);
+  background: var(--c-lane-1);
+  color: #1e2230;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 3px 3px 0 var(--c-ink);
+  cursor: pointer;
+  animation: latest-in 240ms ease-out both;
+}
+
+.auth {
+  max-width: 400px;
+}
+
+.auth__tabs {
+  margin-bottom: var(--space-5);
+}
+
+.auth__input {
+  width: 100%;
+}
+
+.auth__submit {
+  width: 100%;
+  margin-top: var(--space-3);
+}
+
+/* 랭킹 */
+.rankings__body {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(220px, 300px);
+  gap: var(--space-7);
+  align-items: start;
+}
+
+.board-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--c-ink);
+}
+
+.board-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.board-list__rank {
+  flex: none;
+  width: 44px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-list li.is-top1 .board-list__rank,
+.board-list li.is-top2 .board-list__rank,
+.board-list li.is-top3 .board-list__rank {
+  color: var(--c-text);
+}
+
+.board-list li.is-top1 .board-list__rank {
+  font-size: 28px;
+}
+
+.board-list__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+}
+
+.board-list__pts {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-list li.is-me {
+  background: color-mix(in srgb, var(--c-lane-1) 40%, transparent);
+}
+
+.rankings__me {
+  margin: var(--space-3) 0;
+  font-weight: 700;
+}
+
+.how {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--c-ink);
+}
+
+.how li {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.how strong {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+@media (max-width: 760px) {
+  .rankings__body {
+    grid-template-columns: 1fr;
+  }
+
+  .account__who {
+    display: none;
+  }
+}

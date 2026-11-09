@@ -9,11 +9,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use game_core::game_common::{GameKind, GameModule, GamePhase};
 use game_core::games::ladder::{LadderConfig, LadderGame, LadderResult, LadderSnapshot, Rung, RungSource};
+use game_core::points::Reason;
 use game_core::store::{Codec, StoreError, StoredSession};
 use game_core::GameError;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::auth::{award, MaybeUser};
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, ApiResult};
 use crate::fairness::{constant_time_eq, hash_token, random_token, Secret};
@@ -284,6 +286,7 @@ fn mask_hidden_conflict(e: GameError) -> GameError {
 
 async fn reveal(
     State(st): State<AppState>,
+    MaybeUser(user): MaybeUser,
     Path(id): Path<Uuid>,
     headers: HeaderMap,
 ) -> ApiResult<Json<LadderView>> {
@@ -316,6 +319,9 @@ async fn reveal(
             },
         )
         .await?;
+    if let Some(u) = &user {
+        award(&st, u.id, Reason::LadderHost, &id).await;
+    }
     st.events.changed(KIND, &id).await;
     if !session.archived {
         archive(&st, &id, &session).await;

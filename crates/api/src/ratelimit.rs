@@ -11,6 +11,8 @@ pub const BINGO_CREATE: Rule = Rule::new("bingo_create", 20, 60);
 pub const BINGO_JOIN: Rule = Rule::new("bingo_join", 30, 60);
 pub const BINGO_ACTION: Rule = Rule::new("bingo_action", 120, 60);
 pub const PINBALL_CREATE: Rule = Rule::new("pinball_create", 30, 60);
+pub const AUTH_SIGNUP: Rule = Rule::new("auth_signup", 5, 600);
+pub const AUTH_LOGIN: Rule = Rule::new("auth_login", 10, 60);
 
 pub struct Limiter {
     redis: Option<RedisBackend>,

@@ -1,0 +1,10 @@
+target
+**/node_modules
+**/dist
+.git
+.github
+.env
+.env.*
+docs
+*.md
+!apps/site/**/*.md

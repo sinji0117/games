@@ -83,6 +83,23 @@ impl RedisBackend {
         }
     }
 
+    /// 임의 명령 실행 (랭킹 등). 실패는 `Unavailable`
+    pub async fn query<T: ::redis::FromRedisValue>(
+        &self,
+        what: &'static str,
+        cmd: ::redis::Cmd,
+    ) -> Result<T, StoreError> {
+        let mut conn = self.conn.clone();
+        with_timeout(what, cmd.query_async(&mut conn)).await
+    }
+
+    /// 여러 명령을 한 번에 (원자적 MULTI/EXEC)
+    pub async fn pipeline(&self, what: &'static str, pipe: ::redis::Pipeline) -> Result<(), StoreError> {
+        let mut conn = self.conn.clone();
+        let _: () = with_timeout(what, pipe.query_async(&mut conn)).await?;
+        Ok(())
+    }
+
     /// 레이트 리밋 카운트 증가
     pub async fn hit(&self, rule: &Rule, who: &str, now: u64) -> Result<Decision, StoreError> {
         let mut conn = self.conn.clone();

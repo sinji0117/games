@@ -12,6 +12,10 @@ pub enum ApiError {
     Store(StoreError),
     /// 권한 없음 (사유)
     Forbidden(String),
+    /// 로그인 필요 / 로그인 실패 (사유)
+    Unauthorized(String),
+    /// 이미 있음 등 상태 충돌 (사유)
+    Conflict(String),
     RateLimited {
         retry_after: u64,
     },
@@ -93,6 +97,8 @@ impl IntoResponse for ApiError {
                 }
             },
             ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, "forbidden", msg.clone(), None),
+            ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "unauthorized", msg.clone(), None),
+            ApiError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone(), None),
             ApiError::RateLimited { retry_after: secs } => {
                 retry_after = Some(*secs);
                 (

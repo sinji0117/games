@@ -11,6 +11,7 @@ import {
   type RouletteConfig,
   type WinnerMode,
 } from "../../lib/pinball/engine.ts";
+import { useAuth } from "../../lib/auth.tsx";
 import { navigate } from "../../lib/router.ts";
 import { load, save } from "../../lib/storage.ts";
 import { drawMap, drawMarbles, nameColor, readPalette } from "./renderer.ts";
@@ -49,6 +50,7 @@ export function PinballSetup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const preview = useRef<HTMLCanvasElement>(null);
+  const { refresh: refreshMe } = useAuth();
 
   const parsed = parseEntries(raw);
   const names = expandNames(parsed.entries);
@@ -106,6 +108,7 @@ export function PinballSetup() {
     save(LAST_CONFIG_KEY, JSON.stringify({ raw, map, mode, count, skills } satisfies Saved));
     try {
       const game = await pinballApi.create(config);
+      void refreshMe();
       navigate(`/pinball/${game.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "룰렛을 시작하지 못했습니다.");

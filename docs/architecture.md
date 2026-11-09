@@ -13,6 +13,8 @@
   storage/     Redis · MariaDB 어댑터, 결과 보관소
   ratelimit    레이트 리밋 (Redis INCR → 실패 시 메모리)
   events       방 변경 알림 버스 (로컬 broadcast + Redis Pub/Sub room:*)
+  auth         argon2id 비밀번호, Bearer 토큰, MaybeUser/RequireUser 추출기, 포인트 지급
+  ranking      Redis Sorted Set 캐시 + 원장 폴백
   fairness     커밋-공개 시드, 토큰 생성
         │ 순수 함수 호출
         ▼
@@ -22,6 +24,7 @@
   rng          SeededRng (SplitMix64 + xoshiro256**)
   store        SessionBackend 트레이트 · FailoverStore(폴백 · CAS 재시도) · MemoryBackend
   ratelimit    고정 윈도 규칙 · 메모리 카운터
+  points       포인트 사유·점수, 계정 입력 검증, KST 날짜·주
 ```
 
 **원칙**
@@ -33,12 +36,13 @@
 
 | 데이터 | 저장 위치 | 비고 |
 | --- | --- | --- |
-| 계정, 프로필, 포인트 | MariaDB | 원본 |
+| 계정, 로그인 세션(토큰 해시) | MariaDB `users`, `auth_sessions` | 원본 |
+| 포인트 | MariaDB `point_ledger` (+ `users.points` 합계) | 같은 (사용자, 사유, 대상) 은 한 번 |
 | 확정된 게임 결과 · 전적 | MariaDB | 결과 확정 시 1회 기록 |
 | 진행 중 방 상태 | Redis (TTL 24h) | 부재 시 MariaDB `game_sessions` 폴백 |
 | 공개된 사다리 결과 | MariaDB `ladder_results` | 세션 만료 후에도 공유 링크로 조회 |
 | 핀볼 룰렛 결과 | MariaDB `pinball_games` | 서버가 시드로 확정한 순위, 공유 링크로 재생 |
-| 랭킹 | Redis Sorted Set | 6단계 (계정과 함께) |
+| 랭킹 | Redis Sorted Set `rank:points:all`, `rank:points:week:{월요일}` | 캐시. 없거나 실패하면 원장에서 다시 채움 |
 | 레이트 리밋 | Redis | 부재 시 프로세스 메모리 카운터 |
 
 ### 설정별 동작 (0.3.0)

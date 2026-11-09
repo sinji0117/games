@@ -127,3 +127,38 @@ export interface RouletteView {
   timed_out: boolean;
   created_at: number;
 }
+
+// ---------- 계정 · 랭킹 ----------
+
+export interface User {
+  id: number;
+  username: string;
+  points: number;
+  created_at: number;
+}
+
+export interface SessionView {
+  token: string;
+  expires_at: number;
+  user: User;
+}
+
+export interface MeView {
+  user: User;
+  daily_bonus: number | null;
+}
+
+export interface RankEntry {
+  rank: number;
+  user_id: number;
+  username: string;
+  points: number;
+}
+
+export interface RankingView {
+  period: "week" | "all";
+  week?: string;
+  since?: number;
+  top: RankEntry[];
+  me: { rank: number; points: number } | null;
+}

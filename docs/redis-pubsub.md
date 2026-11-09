@@ -6,7 +6,7 @@
 | `game:{kind}:{id}` | Hash `v`·`d`·`e` | `EXPIREAT` | ✅ 진행 중 방 상태. `v` 버전, `d` JSON(스냅샷·시드·논스·방장 토큰 해시), `e` 만료 시각 |
 | `game:{kind}:{id}:events` | Stream | 24h | 방 이벤트 로그 (재접속 시 이어받기) |
 | `room:{game}:{id}` | Pub/Sub 채널 | - | ✅ 방 변경 알림. 서버마다 `PSUBSCRIBE room:*` 연결 하나 |
-| `rank:{kind}:{period}` | Sorted Set | 기간별 | 랭킹 (`daily:2026-11-09`, `all`) |
+| `rank:points:all` · `rank:points:week:{월요일}` | Sorted Set | 주간 15일 | ✅ 포인트 랭킹 캐시. 지급 시 키가 있으면 `ZINCRBY`, 실패하면 키 삭제 → 다음 조회 때 원장으로 다시 채움 |
 | `rl:{scope}:{ip}:{window}` | String(INCR) | 윈도 | ✅ 레이트 리밋 (`ladder_create` 20/분, `ladder_rung` 60/분) |
 
 ## 동시성 (구현됨)

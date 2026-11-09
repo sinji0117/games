@@ -2,6 +2,17 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.7.0] - 2026-11-09
+
+### Added
+- 계정: 가입·로그인·로그아웃·내 정보 (`/api/auth/*`), argon2id 비밀번호, Bearer 토큰(30일, 서버엔 해시만)
+- 포인트 원장(`point_ledger`): 오늘 첫 방문 20, 빙고 참가 10·우승 50, 사다리 결과 공개 5, 핀볼 룰렛 5 — 같은 대상은 한 번만
+- 랭킹 `GET /api/rankings?period=week|all`: Redis Sorted Set 캐시 + MariaDB 원장 폴백, 공동 순위, 내 순위
+- 프론트엔드: 로그인·가입, 헤더 계정 메뉴(포인트), 오늘 첫 방문 알림, 랭킹 화면, 게임 뒤 포인트 새로고침
+- 배포: 3단계 `Dockerfile`(API 가 프론트엔드도 서빙, `STATIC_DIR`), `docker-compose.prod.yml`, `deploy/nginx.conf`(WebSocket 포함), `deploy/env.production.example`
+- CI 에 Docker 이미지 빌드 추가
+- `game_core::points`: 포인트 규칙, 계정 입력 검증, KST 날짜·주 계산
+
 ## [0.6.1] - 2026-11-09
 
 ### Added
