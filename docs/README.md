@@ -8,7 +8,7 @@
 | 04 | [conventions.md](conventions.md) | 코딩 · 버전 관리 규칙 | ✅ |
 | 05 | [games-ladder.md](games-ladder.md) | 사다리 규칙 · 데이터 모델 · 경로 알고리즘 · 프론트엔드 | ✅ |
 | 06 | [games-bingo.md](games-bingo.md) | 빙고 룰 · 방 관리 · 줄 판정 · 공정성 · 화면 | ✅ |
-| 07 | [games-pinball.md](games-pinball.md) | 결정적 물리 엔진 · 서버 재시뮬레이션 · 결정성 규칙 | ✅ |
+| 07 | [games-pinball.md](games-pinball.md) | 핀볼 룰렛 규칙 · 공정성 · 결정적 물리 엔진 | ✅ |
 | 08 | [api.md](api.md) | REST / WebSocket 명세 | ✅ 사다리 · 빙고 · 핀볼 · WebSocket |
 | 09 | [redis-pubsub.md](redis-pubsub.md) | Redis 키 설계 · 동시성 · 폴백 · 실시간 동기화 | ✅ |
 | 10 | [deployment.md](deployment.md) | Rpanel / Docker 배포 | 📝 설계 초안 |

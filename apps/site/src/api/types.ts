@@ -1,4 +1,6 @@
 // docs/api.md 와 1:1 로 맞춘 응답 타입
+import type { RouletteConfig } from "../lib/pinball/engine.ts";
+
 
 export type GameKind = "ladder" | "bingo" | "pinball";
 export type GamePhase = "lobby" | "playing" | "finished";
@@ -109,33 +111,19 @@ export interface CreateBingoRequest {
   target_lines?: number;
 }
 
-// ---------- 핀볼 ----------
+// ---------- 핀볼 룰렛 ----------
 
-export interface PinballStart {
+export interface RouletteView {
   id: string;
+  kind: "pinball";
+  config: RouletteConfig;
   seed: string;
-  table: string;
-  max_ticks: number;
-  ticks_per_second: number;
-}
-
-export interface PinballFinish {
-  score: number;
+  /** 구슬 번호 → 이름 */
+  marbles: string[];
+  /** 1등부터 구슬 번호 */
+  ranking: number[];
+  winners: number[];
   ticks: number;
-  game_over: boolean;
-  matches_client: boolean | null;
-  rank_today: number;
-  rank_all: number;
-}
-
-export interface PinballScoreEntry {
-  name: string;
-  score: number;
-  seconds: number;
+  timed_out: boolean;
   created_at: number;
-}
-
-export interface PinballScores {
-  today: PinballScoreEntry[];
-  all: PinballScoreEntry[];
 }

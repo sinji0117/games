@@ -1,153 +1,298 @@
-//! 결정적 핀볼 엔진 (테이블 v1).
+//! 핀볼 룰렛 (마블 룰렛) 엔진.
 //!
-//! 브라우저(`apps/site/src/lib/pinball/engine.ts`)와 **비트 단위로 같은 결과**를 내도록 만든 작은 물리 엔진입니다.
-//! 브라우저는 입력 기록(틱, 동작)만 보내고, 서버는 같은 시드와 입력으로 처음부터 다시 돌려 점수를 직접 계산합니다.
+//! 참가자 이름마다 구슬을 만들어 긴 핀볼 맵 위에서 굴립니다. 결승선에 도착한 순서로 당첨자를 정합니다.
 //!
-//! # 결정성 규칙 (TS 포팅도 똑같이 지켜야 함)
-//! - `f64` 의 `+ - * /` 와 `sqrt` 만 사용 (IEEE 754 로 결과가 정해진 연산). 삼각함수 대신 [`FLIPPER_DIRS`] 표 사용.
-//! - 연산 순서·괄호를 바꾸지 않음. 두 구현은 줄 단위로 대응합니다.
-//! - 반올림 없음. 점수는 정수.
-//! - 난수는 [`SeededRng`] 로만, 정해진 시점(발사, 범퍼 충돌)에만 꺼냄.
+//! # 공정성
+//! 이름 목록이 정해진 **뒤에** 서버가 시드를 뽑아 [`run`] 으로 도착 순서를 확정합니다. 브라우저는 같은 시드로
+//! [`Race`] 를 재생해 화면에 보여주며, 끝난 순서가 서버 결과와 같은지 확인합니다.
+//! 브라우저 구현(`apps/site/src/lib/pinball/engine.ts`)과 **비트 단위로 같은 결과**를 내야 합니다.
+//!
+//! # 결정성 규칙 (TS 포팅도 똑같이)
+//! - `f64` 의 `+ - * /` 와 `sqrt` 만. 회전은 [`rotation::DIRS`] 표로.
+//! - 연산 순서·괄호·반복 순서를 바꾸지 않음. 정렬은 (y, 번호) 로 순서가 하나로 정해지게.
+//! - 난수는 [`SeededRng`] 로, 정해진 순서(자리 섞기 → 자리 흔들림 → 스킬·흔들기)로만 꺼냄.
 //!
 //! # 단위
-//! 좌표는 테이블 단위(가로 400 × 세로 700, y 는 아래로 증가), 속도는 단위/틱, 1틱 = 1/120초.
+//! 좌표: 가로 400, 세로는 맵마다 다름 (y 아래로 증가). 속도: 단위/틱, 1틱 = 1/120초.
 
 use crate::error::{GameError, GameResult};
+use crate::game_common::validate_label;
+use crate::games::rotation::{DIRS, STEPS};
 use crate::rng::SeededRng;
 
-pub const TABLE_VERSION: &str = "v1";
 pub const WIDTH: f64 = 400.0;
-pub const HEIGHT: f64 = 700.0;
 pub const TICKS_PER_SECOND: u32 = 120;
-/// 한 판 최대 길이 (15분)
-pub const MAX_TICKS: u32 = TICKS_PER_SECOND * 60 * 15;
-pub const MAX_INPUTS: usize = 50_000;
-pub const BALLS: u32 = 3;
+/// 경주 최대 길이 (5분). 넘으면 남은 구슬은 결승선에 가까운 순서로 순위를 매김
+pub const MAX_TICKS: u32 = TICKS_PER_SECOND * 60 * 5;
+pub const MAX_MARBLES: usize = 100;
+pub const MAX_COUNT_PER_NAME: u32 = 20;
+pub const NAME_MAX_CHARS: usize = 20;
 
-const BALL_R: f64 = 9.0;
-const GRAVITY: f64 = 0.12;
-const DAMPING: f64 = 0.999;
-const SPEED_CAP: f64 = 14.0;
-const SUBSTEPS: u32 = 4;
-const SUB: f64 = 0.25;
+pub const MARBLE_R: f64 = 8.0;
+const GRAVITY: f64 = 0.1;
+const DAMPING: f64 = 0.998;
+const SPEED_CAP: f64 = 10.0;
+const SUBSTEPS: u32 = 3;
+const SUB: f64 = 1.0 / 3.0;
 const WALL_R: f64 = 2.0;
-const WALL_E: f64 = 0.5;
-const SLING_E: f64 = 0.6;
-const SLING_KICK: f64 = 4.0;
-const BUMPER_KICK: f64 = 6.0;
-const FLIPPER_E: f64 = 0.3;
-const POST_E: f64 = 0.8;
-const FLIPPER_R: f64 = 6.0;
-const FLIPPER_LEN: f64 = 56.0;
-const FLIPPER_STEPS: usize = 8;
-const START_X: f64 = 365.0;
-const START_Y: f64 = 648.0;
-const DRAIN_Y: f64 = 720.0;
-const PLUNGER_MAX: u32 = 60;
-const COOLDOWN: u32 = 6;
+const WALL_E: f64 = 0.4;
+const PEG_E: f64 = 0.5;
+const MARBLE_E: f64 = 0.8;
+const SPINNER_E: f64 = 0.5;
+const SPINNER_R: f64 = 4.0;
+const BUMPER_KICK: f64 = 5.0;
+/// 이만큼 아무도 도착하지 않으면 모든 구슬을 흔듦 (끼임 방지)
+const STALL_TICKS: u32 = TICKS_PER_SECOND * 10;
+/// 스킬 간격
+const SKILL_EVERY: u32 = TICKS_PER_SECOND * 2;
+/// 출발 자리: 한 줄에 16개
+const SLOTS_PER_ROW: usize = 16;
 
-/// 왼쪽 플리퍼 방향 (cos, sin): 0 = 쉬는 자세(아래 30°), 8 = 든 자세(위 28°). 오른쪽은 x 를 뒤집어 씀.
-/// Python `math.cos/sin` 으로 한 번 계산해 Rust·TS 양쪽에 같은 리터럴로 넣었습니다.
-pub const FLIPPER_DIRS: [[f64; 2]; FLIPPER_STEPS + 1] = [
-    [0.8660254037844387, 0.49999999999999994],
-    [0.9222009716704518, 0.3867109616368206],
-    [0.963630453208623, 0.26723837607825685],
-    [0.9896513868196702, 0.14349262199117932],
-    [0.9998476951563913, 0.01745240643728351],
-    [0.9940563382223196, -0.10886687485196457],
-    [0.9723699203976766, -0.2334453638559054],
-    [0.9351352096860117, -0.35429103799771583],
-    [0.882947592858927, -0.4694715627858908],
-];
-
-/// 벽 (ax, ay, bx, by)
-pub const WALLS: [[f64; 4]; 15] = [
-    [20.0, 700.0, 20.0, 130.0],
-    [20.0, 130.0, 50.0, 65.0],
-    [50.0, 65.0, 110.0, 28.0],
-    [110.0, 28.0, 175.0, 18.0],
-    [175.0, 18.0, 250.0, 24.0],
-    [250.0, 24.0, 320.0, 50.0],
-    [320.0, 50.0, 365.0, 95.0],
-    [365.0, 95.0, 380.0, 140.0],
-    [380.0, 140.0, 380.0, 700.0],
-    [350.0, 700.0, 350.0, 190.0],
-    [350.0, 660.0, 380.0, 660.0],
-    [20.0, 540.0, 108.0, 606.0],
-    [350.0, 540.0, 262.0, 606.0],
-    // 슬링샷 뒤쪽 벽
-    [50.0, 440.0, 50.0, 515.0],
-    [320.0, 440.0, 320.0, 515.0],
-];
-
-/// 슬링샷 아래쪽 벽 (튕기지 않는 부분)
-pub const SLING_BASES: [[f64; 4]; 2] = [[50.0, 515.0, 95.0, 535.0], [320.0, 515.0, 275.0, 535.0]];
-/// 슬링샷 차는 면
-pub const SLINGS: [[f64; 4]; 2] = [[50.0, 440.0, 95.0, 535.0], [320.0, 440.0, 275.0, 535.0]];
-/// 범퍼 (x, y, r)
-pub const BUMPERS: [[f64; 3]; 3] = [[125.0, 230.0, 20.0], [245.0, 230.0, 20.0], [185.0, 300.0, 20.0]];
-/// 고무 기둥 (x, y, r) — 바깥벽을 타고 도는 공을 안쪽으로 튕김
-pub const POSTS: [[f64; 3]; 2] = [[44.0, 250.0, 9.0], [326.0, 250.0, 9.0]];
-/// 롤오버 센서 (x, y, r) — 통과하면 불이 켜짐, 셋 다 켜지면 보너스
-pub const SENSORS: [[f64; 3]; 3] = [[130.0, 110.0, 10.0], [185.0, 95.0, 10.0], [240.0, 110.0, 10.0]];
-/// 플리퍼 축 (x, y), 0 = 왼쪽, 1 = 오른쪽
-pub const PIVOTS: [[f64; 2]; 2] = [[110.0, 610.0], [260.0, 610.0]];
-
-pub const SCORE_BUMPER: u64 = 100;
-pub const SCORE_SLING: u64 = 10;
-pub const SCORE_SENSOR: u64 = 50;
-pub const SCORE_ALL_LIT: u64 = 1000;
-pub const MAX_MULTIPLIER: u64 = 5;
-
+/// 맵
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-pub enum Action {
-    LeftDown,
-    LeftUp,
-    RightDown,
-    RightUp,
-    PlungerDown,
-    PlungerUp,
+pub enum MapId {
+    /// 핀 숲 → 풍차 → 지그재그 → 범퍼 → 좁은 관문
+    Classic,
+    /// 짧은 맵: 핀 숲 → 관문
+    Sprint,
 }
 
-/// `tick` 이 시작될 때 적용되는 입력
+impl MapId {
+    pub const ALL: [MapId; 2] = [MapId::Classic, MapId::Sprint];
+}
+
+/// 당첨 기준
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Input {
-    pub tick: u32,
-    pub action: Action,
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum WinnerMode {
+    /// 먼저 도착한 순서
+    First,
+    /// 늦게 도착한 순서 (꼴찌부터)
+    Last,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Entry {
+    pub name: String,
+    /// 구슬 개수 (`이름*3`)
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RouletteConfig {
+    pub entries: Vec<Entry>,
+    pub map: MapId,
+    pub winner_mode: WinnerMode,
+    /// 당첨 인원
+    pub winner_count: usize,
+    /// 2초마다 무작위 구슬 하나가 튀어 오름
+    pub skills: bool,
+}
+
+/// `"수박*2, 키위, 귤*3"` 형식 해석 (쉼표나 줄바꿈으로 구분)
+pub fn parse_entries(raw: &str) -> GameResult<Vec<Entry>> {
+    let mut out: Vec<Entry> = Vec::new();
+    for part in raw.split([',', '\n']) {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let (name, count) = match part.rsplit_once('*') {
+            Some((n, c)) if !c.trim().is_empty() && c.trim().chars().all(|ch| ch.is_ascii_digit()) => (
+                n,
+                c.trim()
+                    .parse::<u32>()
+                    .map_err(|_| GameError::invalid("entries", "개수가 너무 큽니다"))?,
+            ),
+            _ => (part, 1),
+        };
+        let name = validate_label("entries", name, NAME_MAX_CHARS)?;
+        match out.iter_mut().find(|e| e.name == name) {
+            Some(e) => e.count += count,
+            None => out.push(Entry { name, count }),
+        }
+    }
+    Ok(out)
+}
+
+impl RouletteConfig {
+    pub fn validate(&self) -> GameResult<Vec<String>> {
+        if self.entries.is_empty() {
+            return Err(GameError::invalid("entries", "이름을 하나 이상 적어 주세요"));
+        }
+        let mut names = Vec::new();
+        for e in &self.entries {
+            let name = validate_label("entries", &e.name, NAME_MAX_CHARS)?;
+            if e.count == 0 || e.count > MAX_COUNT_PER_NAME {
+                return Err(GameError::invalid(
+                    "entries",
+                    format!("한 이름의 구슬은 1~{MAX_COUNT_PER_NAME}개입니다"),
+                ));
+            }
+            for _ in 0..e.count {
+                names.push(name.clone());
+            }
+        }
+        if names.len() < 2 {
+            return Err(GameError::invalid("entries", "구슬이 2개 이상이어야 합니다"));
+        }
+        if names.len() > MAX_MARBLES {
+            return Err(GameError::invalid(
+                "entries",
+                format!("구슬은 최대 {MAX_MARBLES}개입니다 (지금 {}개)", names.len()),
+            ));
+        }
+        if self.winner_count == 0 || self.winner_count >= names.len() {
+            return Err(GameError::invalid(
+                "winner_count",
+                format!("당첨 인원은 1~{}명입니다", names.len() - 1),
+            ));
+        }
+        Ok(names)
+    }
+}
+
+// ---------- 맵 ----------
+
+/// 회전 막대 (중심, 반 길이, 단계/틱, 시작 단계)
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Ball {
+pub struct Spinner {
+    pub x: f64,
+    pub y: f64,
+    pub half: f64,
+    pub speed: i32,
+    pub phase: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapDef {
+    pub height: f64,
+    pub finish_y: f64,
+    /// 선분 벽 (ax, ay, bx, by)
+    pub walls: Vec<[f64; 4]>,
+    /// 고정 핀 (x, y, r)
+    pub pegs: Vec<[f64; 3]>,
+    /// 범퍼 (x, y, r) — 닿으면 튕겨냄
+    pub bumpers: Vec<[f64; 3]>,
+    pub spinners: Vec<Spinner>,
+}
+
+fn peg_field(pegs: &mut Vec<[f64; 3]>, y0: f64, rows: usize, gap: f64) {
+    for row in 0..rows {
+        let y = y0 + row as f64 * gap;
+        // 벽과 바깥 핀 사이 틈이 구슬 지름(16)보다 넓어야 구슬이 핀 위에 걸쳐 멈추지 않음 (틈 23 이상)
+        let offset = if row % 2 == 0 { 40.0 } else { 60.0 };
+        let mut x = offset;
+        while x <= 360.0 {
+            pegs.push([x, y, 5.0]);
+            x += 40.0;
+        }
+    }
+}
+
+pub fn map_def(id: MapId) -> MapDef {
+    let mut walls: Vec<[f64; 4]> = Vec::new();
+    let mut pegs: Vec<[f64; 3]> = Vec::new();
+    let mut bumpers: Vec<[f64; 3]> = Vec::new();
+    let mut spinners: Vec<Spinner> = Vec::new();
+    match id {
+        MapId::Classic => {
+            let h = 2400.0;
+            walls.push([10.0, 0.0, 390.0, 0.0]);
+            walls.push([10.0, 0.0, 10.0, h]);
+            walls.push([390.0, 0.0, 390.0, h]);
+            // 출발 깔때기
+            walls.push([10.0, 200.0, 170.0, 290.0]);
+            walls.push([390.0, 200.0, 230.0, 290.0]);
+            // 핀 숲
+            peg_field(&mut pegs, 340.0, 12, 40.0);
+            // 풍차 두 개
+            spinners.push(Spinner {
+                x: 120.0,
+                y: 900.0,
+                half: 70.0,
+                speed: 2,
+                phase: 0,
+            });
+            spinners.push(Spinner {
+                x: 280.0,
+                y: 900.0,
+                half: 70.0,
+                speed: -2,
+                phase: 64,
+            });
+            // 지그재그 경사
+            walls.push([10.0, 1000.0, 300.0, 1070.0]);
+            walls.push([390.0, 1140.0, 100.0, 1210.0]);
+            walls.push([10.0, 1280.0, 300.0, 1350.0]);
+            walls.push([390.0, 1420.0, 100.0, 1490.0]);
+            // 범퍼 + 핀
+            bumpers.push([110.0, 1620.0, 18.0]);
+            bumpers.push([290.0, 1620.0, 18.0]);
+            bumpers.push([200.0, 1720.0, 18.0]);
+            peg_field(&mut pegs, 1800.0, 4, 40.0);
+            // 마지막 관문: 한두 개씩만 빠져나감
+            walls.push([10.0, 2000.0, 183.0, 2150.0]);
+            walls.push([390.0, 2000.0, 217.0, 2150.0]);
+            spinners.push(Spinner {
+                x: 200.0,
+                y: 2230.0,
+                half: 45.0,
+                speed: 3,
+                phase: 32,
+            });
+            MapDef {
+                height: h,
+                finish_y: 2340.0,
+                walls,
+                pegs,
+                bumpers,
+                spinners,
+            }
+        }
+        MapId::Sprint => {
+            let h = 1200.0;
+            walls.push([10.0, 0.0, 390.0, 0.0]);
+            walls.push([10.0, 0.0, 10.0, h]);
+            walls.push([390.0, 0.0, 390.0, h]);
+            walls.push([10.0, 200.0, 170.0, 290.0]);
+            walls.push([390.0, 200.0, 230.0, 290.0]);
+            peg_field(&mut pegs, 340.0, 10, 40.0);
+            spinners.push(Spinner {
+                x: 200.0,
+                y: 800.0,
+                half: 80.0,
+                speed: 2,
+                phase: 0,
+            });
+            walls.push([10.0, 880.0, 183.0, 1000.0]);
+            walls.push([390.0, 880.0, 217.0, 1000.0]);
+            MapDef {
+                height: h,
+                finish_y: 1140.0,
+                walls,
+                pegs,
+                bumpers,
+                spinners,
+            }
+        }
+    }
+}
+
+// ---------- 물리 ----------
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Marble {
     pub x: f64,
     pub y: f64,
     pub vx: f64,
     pub vy: f64,
-}
-
-#[derive(Debug, Clone)]
-pub struct Pinball {
-    rng: SeededRng,
-    pub tick: u32,
-    pub ball: Ball,
-    pub balls_left: u32,
-    pub score: u64,
-    pub multiplier: u64,
-    pub lights: [bool; 3],
-    /// 플리퍼 단계 (0..=8)
-    pub flippers: [usize; 2],
-    prev_flippers: [usize; 2],
-    pressed: [bool; 2],
-    pub charging: bool,
-    pub charge: u32,
-    pub game_over: bool,
-    inside_sensor: [bool; 3],
-    bumper_cool: [u32; 3],
-    sling_cool: [u32; 2],
-    /// 점수 이벤트 수 (통계·검증 보조)
-    pub hits: u32,
+    pub active: bool,
 }
 
 fn dot(ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
@@ -158,18 +303,18 @@ fn clamp01(t: f64) -> f64 {
     t.clamp(0.0, 1.0)
 }
 
-/// 공과 캡슐(선분 + 반지름) 충돌. 겹치면 공을 밀어내고 법선(nx, ny)과 선분상의 위치 t 를 돌려줌.
-fn capsule_contact(b: &mut Ball, ax: f64, ay: f64, bx: f64, by: f64, r: f64) -> Option<(f64, f64, f64)> {
+/// 구슬과 캡슐(선분 + 두께) 충돌: 밀어내고 (법선, 선분상 위치) 반환
+fn capsule_contact(m: &mut Marble, ax: f64, ay: f64, bx: f64, by: f64, r: f64) -> Option<(f64, f64, f64)> {
     let ex = bx - ax;
     let ey = by - ay;
     let len2 = ex * ex + ey * ey;
-    let t = clamp01(dot(b.x - ax, b.y - ay, ex, ey) / len2);
+    let t = clamp01(dot(m.x - ax, m.y - ay, ex, ey) / len2);
     let qx = ax + ex * t;
     let qy = ay + ey * t;
-    let dx = b.x - qx;
-    let dy = b.y - qy;
+    let dx = m.x - qx;
+    let dy = m.y - qy;
     let d2 = dx * dx + dy * dy;
-    let rr = BALL_R + r;
+    let rr = MARBLE_R + r;
     if d2 >= rr * rr || d2 < 1e-12 {
         return None;
     }
@@ -177,319 +322,350 @@ fn capsule_contact(b: &mut Ball, ax: f64, ay: f64, bx: f64, by: f64, r: f64) -> 
     let nx = dx / d;
     let ny = dy / d;
     let pen = rr - d;
-    b.x += nx * pen;
-    b.y += ny * pen;
+    m.x += nx * pen;
+    m.y += ny * pen;
     Some((nx, ny, t))
 }
 
-/// 공과 원(기둥) 충돌. 겹치면 밀어내고 법선을 돌려줌
-fn circle_contact(b: &mut Ball, cx: f64, cy: f64, r: f64) -> Option<(f64, f64)> {
-    let dx = b.x - cx;
-    let dy = b.y - cy;
+fn circle_contact(m: &mut Marble, cx: f64, cy: f64, r: f64) -> Option<(f64, f64)> {
+    let dx = m.x - cx;
+    let dy = m.y - cy;
     let d2 = dx * dx + dy * dy;
-    let rr = BALL_R + r;
+    let rr = MARBLE_R + r;
     if d2 >= rr * rr || d2 < 1e-12 {
         return None;
     }
     let d = d2.sqrt();
     let nx = dx / d;
     let ny = dy / d;
-    b.x = cx + nx * rr;
-    b.y = cy + ny * rr;
+    m.x = cx + nx * rr;
+    m.y = cy + ny * rr;
     Some((nx, ny))
 }
 
-/// 표면 속도(sx, sy)를 기준으로 반사
-fn bounce(b: &mut Ball, nx: f64, ny: f64, e: f64, sx: f64, sy: f64) {
-    let vn = dot(b.vx - sx, b.vy - sy, nx, ny);
+fn bounce(m: &mut Marble, nx: f64, ny: f64, e: f64, sx: f64, sy: f64) {
+    let vn = dot(m.vx - sx, m.vy - sy, nx, ny);
     if vn < 0.0 {
         let k = (1.0 + e) * vn;
-        b.vx -= k * nx;
-        b.vy -= k * ny;
+        m.vx -= k * nx;
+        m.vy -= k * ny;
     }
 }
 
-fn flipper_dir(side: usize, step: usize) -> (f64, f64) {
-    let d = FLIPPER_DIRS[step];
-    if side == 0 {
-        (d[0], d[1])
-    } else {
-        (-d[0], d[1])
-    }
+fn spin_step(s: &Spinner, tick: u32) -> usize {
+    let n = STEPS as i64;
+    let raw = s.phase as i64 + s.speed as i64 * tick as i64;
+    (((raw % n) + n) % n) as usize
 }
 
-impl Pinball {
-    pub fn new(seed: u64) -> Self {
-        Self {
-            rng: SeededRng::new(seed),
-            tick: 0,
-            ball: Ball {
-                x: START_X,
-                y: START_Y,
+/// 화면 효과용 이벤트 (계산에는 영향 없음)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RaceEvent {
+    Finish(usize),
+    Skill(usize),
+    Shake,
+}
+
+#[derive(Debug, Clone)]
+pub struct Race {
+    pub map: MapDef,
+    rng: SeededRng,
+    skills: bool,
+    pub tick: u32,
+    pub marbles: Vec<Marble>,
+    /// 도착 순서 (구슬 번호)
+    pub finished: Vec<usize>,
+    last_finish_tick: u32,
+    order: Vec<usize>,
+    pub events: Vec<RaceEvent>,
+}
+
+impl Race {
+    /// `marble_count` 개 구슬을 시드로 섞은 출발 자리에 놓습니다. 구슬 번호 = 이름 목록을 펼친 순서.
+    pub fn new(map: MapId, marble_count: usize, skills: bool, seed: u64) -> Self {
+        let mut rng = SeededRng::new(seed);
+        let mut slot_of: Vec<usize> = (0..marble_count).collect();
+        rng.shuffle(&mut slot_of);
+        let mut marbles = vec![
+            Marble {
+                x: 0.0,
+                y: 0.0,
                 vx: 0.0,
                 vy: 0.0,
-            },
-            balls_left: BALLS,
-            score: 0,
-            multiplier: 1,
-            lights: [false; 3],
-            flippers: [0, 0],
-            prev_flippers: [0, 0],
-            pressed: [false, false],
-            charging: false,
-            charge: 0,
-            game_over: false,
-            inside_sensor: [false; 3],
-            bumper_cool: [0; 3],
-            sling_cool: [0; 2],
-            hits: 0,
+                active: true
+            };
+            marble_count
+        ];
+        for (i, &slot) in slot_of.iter().enumerate() {
+            let row = slot / SLOTS_PER_ROW;
+            let col = slot % SLOTS_PER_ROW;
+            let jitter = (rng.next_f64() - 0.5) * 2.0;
+            marbles[i].x = 26.0 + col as f64 * 23.0 + jitter;
+            marbles[i].y = 30.0 + row as f64 * 20.0;
+        }
+        Self {
+            map: map_def(map),
+            rng,
+            skills,
+            tick: 0,
+            marbles,
+            finished: Vec::new(),
+            last_finish_tick: 0,
+            order: Vec::with_capacity(marble_count),
+            events: Vec::new(),
         }
     }
 
-    /// 플리퍼 끝점 (그리기용)
-    pub fn flipper_tip(&self, side: usize) -> (f64, f64) {
-        let (dx, dy) = flipper_dir(side, self.flippers[side]);
-        (
-            PIVOTS[side][0] + dx * FLIPPER_LEN,
-            PIVOTS[side][1] + dy * FLIPPER_LEN,
-        )
+    pub fn is_done(&self) -> bool {
+        self.finished.len() == self.marbles.len() || self.tick >= MAX_TICKS
     }
 
-    fn in_lane(&self) -> bool {
-        self.ball.x > 350.0 && self.ball.y > 600.0
+    /// 회전 막대 끝점 (그리기용)
+    pub fn spinner_ends(&self, i: usize) -> [f64; 4] {
+        let s = &self.map.spinners[i];
+        let d = DIRS[spin_step(s, self.tick)];
+        [
+            s.x - d[0] * s.half,
+            s.y - d[1] * s.half,
+            s.x + d[0] * s.half,
+            s.y + d[1] * s.half,
+        ]
     }
 
-    fn apply(&mut self, a: Action) {
-        match a {
-            Action::LeftDown => self.pressed[0] = true,
-            Action::LeftUp => self.pressed[0] = false,
-            Action::RightDown => self.pressed[1] = true,
-            Action::RightUp => self.pressed[1] = false,
-            Action::PlungerDown => {
-                if !self.charging {
-                    self.charging = true;
-                    self.charge = 0;
-                }
-            }
-            Action::PlungerUp => {
-                if self.charging {
-                    self.charging = false;
-                    if self.in_lane() {
-                        let jitter = 0.97 + self.rng.next_f64() * 0.06;
-                        self.ball.vy = -(6.0 + self.charge as f64 * 0.12) * jitter;
-                    }
-                    self.charge = 0;
-                }
-            }
-        }
-    }
-
-    fn add(&mut self, base: u64) {
-        self.score += base * self.multiplier;
-        self.hits += 1;
-    }
-
-    /// 한 틱 진행. `actions` 는 이 틱 시작 시 적용할 입력(순서대로).
-    pub fn step(&mut self, actions: &[Action]) {
-        if self.game_over {
+    pub fn step(&mut self) {
+        self.events.clear();
+        if self.is_done() {
             return;
         }
-        for &a in actions {
-            self.apply(a);
-        }
-        for side in 0..2 {
-            self.prev_flippers[side] = self.flippers[side];
-            if self.pressed[side] {
-                if self.flippers[side] < FLIPPER_STEPS {
-                    self.flippers[side] += 1;
-                }
-            } else if self.flippers[side] > 0 {
-                self.flippers[side] -= 1;
+        let n = self.marbles.len();
+        for m in self.marbles.iter_mut() {
+            if !m.active {
+                continue;
+            }
+            m.vy += GRAVITY;
+            m.vx *= DAMPING;
+            m.vy *= DAMPING;
+            let s2 = m.vx * m.vx + m.vy * m.vy;
+            if s2 > SPEED_CAP * SPEED_CAP {
+                let k = SPEED_CAP / s2.sqrt();
+                m.vx *= k;
+                m.vy *= k;
             }
         }
-        if self.charging && self.charge < PLUNGER_MAX {
-            self.charge += 1;
+
+        // 스킬: 무작위 구슬 하나를 튀겨 올림
+        if self.skills && self.tick > 0 && self.tick.is_multiple_of(SKILL_EVERY) {
+            let active: Vec<usize> = (0..n).filter(|&i| self.marbles[i].active).collect();
+            if !active.is_empty() {
+                let who = active[self.rng.below(active.len() as u64) as usize];
+                let m = &mut self.marbles[who];
+                m.vx += (self.rng.next_f64() - 0.5) * 8.0;
+                m.vy -= 3.0 + self.rng.next_f64() * 3.0;
+                self.events.push(RaceEvent::Skill(who));
+            }
+        }
+        // 끼임 방지: 한동안 아무도 도착하지 않으면 모두 흔듦
+        if self.tick - self.last_finish_tick >= STALL_TICKS && self.tick.is_multiple_of(STALL_TICKS) {
+            for i in 0..n {
+                if self.marbles[i].active {
+                    let kx = (self.rng.next_f64() - 0.5) * 3.0;
+                    let ky = 2.0 + self.rng.next_f64() * 2.0;
+                    self.marbles[i].vx += kx;
+                    self.marbles[i].vy -= ky;
+                }
+            }
+            self.events.push(RaceEvent::Shake);
         }
 
-        let b = &mut self.ball;
-        b.vy += GRAVITY;
-        b.vx *= DAMPING;
-        b.vy *= DAMPING;
-        let s2 = b.vx * b.vx + b.vy * b.vy;
-        if s2 > SPEED_CAP * SPEED_CAP {
-            let k = SPEED_CAP / s2.sqrt();
-            b.vx *= k;
-            b.vy *= k;
-        }
+        // 회전 막대의 이번 틱/지난 틱 방향
+        let spins: Vec<(usize, usize)> = self
+            .map
+            .spinners
+            .iter()
+            .map(|s| (spin_step(s, self.tick + 1), spin_step(s, self.tick)))
+            .collect();
 
         for _ in 0..SUBSTEPS {
-            self.ball.x += self.ball.vx * SUB;
-            self.ball.y += self.ball.vy * SUB;
-            self.collide();
-        }
-
-        self.sensors();
-
-        if self.ball.y > DRAIN_Y {
-            self.balls_left -= 1;
-            if self.balls_left == 0 {
-                self.game_over = true;
-            } else {
-                self.ball = Ball {
-                    x: START_X,
-                    y: START_Y,
-                    vx: 0.0,
-                    vy: 0.0,
-                };
+            for m in self.marbles.iter_mut() {
+                if m.active {
+                    m.x += m.vx * SUB;
+                    m.y += m.vy * SUB;
+                }
             }
+            for i in 0..n {
+                if self.marbles[i].active {
+                    self.collide_static(i, &spins);
+                }
+            }
+            self.collide_marbles();
         }
-        for c in self.bumper_cool.iter_mut() {
-            *c = c.saturating_sub(1);
-        }
-        for c in self.sling_cool.iter_mut() {
-            *c = c.saturating_sub(1);
+
+        let finish_y = self.map.finish_y;
+        for i in 0..n {
+            if self.marbles[i].active && self.marbles[i].y > finish_y {
+                self.marbles[i].active = false;
+                self.finished.push(i);
+                self.last_finish_tick = self.tick + 1;
+                self.events.push(RaceEvent::Finish(i));
+            }
         }
         self.tick += 1;
     }
 
-    // TS 포팅과 줄 단위로 맞추기 위해 인덱스 루프를 그대로 둡니다.
     #[allow(clippy::needless_range_loop)]
-    fn collide(&mut self) {
-        for w in WALLS.iter().chain(SLING_BASES.iter()) {
-            if let Some((nx, ny, _)) = capsule_contact(&mut self.ball, w[0], w[1], w[2], w[3], WALL_R) {
-                bounce(&mut self.ball, nx, ny, WALL_E, 0.0, 0.0);
+    fn collide_static(&mut self, i: usize, spins: &[(usize, usize)]) {
+        let m = &mut self.marbles[i];
+        for w in &self.map.walls {
+            if let Some((nx, ny, _)) = capsule_contact(m, w[0], w[1], w[2], w[3], WALL_R) {
+                bounce(m, nx, ny, WALL_E, 0.0, 0.0);
             }
         }
-        for (i, s) in SLINGS.iter().enumerate() {
-            if let Some((nx, ny, _)) = capsule_contact(&mut self.ball, s[0], s[1], s[2], s[3], WALL_R) {
-                bounce(&mut self.ball, nx, ny, SLING_E, 0.0, 0.0);
-                if self.sling_cool[i] == 0 {
-                    self.ball.vx += nx * SLING_KICK;
-                    self.ball.vy += ny * SLING_KICK;
-                    self.sling_cool[i] = COOLDOWN;
-                    self.add(SCORE_SLING);
+        for p in &self.map.pegs {
+            if let Some((nx, ny)) = circle_contact(m, p[0], p[1], p[2]) {
+                bounce(m, nx, ny, PEG_E, 0.0, 0.0);
+            }
+        }
+        for b in &self.map.bumpers {
+            if let Some((nx, ny)) = circle_contact(m, b[0], b[1], b[2]) {
+                m.vx = nx * BUMPER_KICK;
+                m.vy = ny * BUMPER_KICK;
+            }
+        }
+        for k in 0..self.map.spinners.len() {
+            let s = self.map.spinners[k];
+            let d = DIRS[spins[k].0];
+            let o = DIRS[spins[k].1];
+            let ax = s.x - d[0] * s.half;
+            let ay = s.y - d[1] * s.half;
+            let bx = s.x + d[0] * s.half;
+            let by = s.y + d[1] * s.half;
+            if let Some((nx, ny, t)) = capsule_contact(m, ax, ay, bx, by, SPINNER_R) {
+                // 접점이 이번 틱에 움직인 거리 = 표면 속도
+                let arm = s.half * (2.0 * t - 1.0);
+                let sx = (d[0] - o[0]) * arm;
+                let sy = (d[1] - o[1]) * arm;
+                bounce(m, nx, ny, SPINNER_E, sx, sy);
+            }
+        }
+    }
+
+    /// 구슬끼리 충돌. y 로 정렬한 뒤 가까운 쌍만 확인 (순서는 (y, 번호) 로 하나로 정해짐)
+    fn collide_marbles(&mut self) {
+        let n = self.marbles.len();
+        self.order.clear();
+        for i in 0..n {
+            if self.marbles[i].active {
+                self.order.push(i);
+            }
+        }
+        let ms = &self.marbles;
+        self.order.sort_by(|&a, &b| {
+            let (ya, yb) = (ms[a].y, ms[b].y);
+            if ya < yb {
+                std::cmp::Ordering::Less
+            } else if ya > yb {
+                std::cmp::Ordering::Greater
+            } else {
+                a.cmp(&b)
+            }
+        });
+        let rr = MARBLE_R * 2.0;
+        for p in 0..self.order.len() {
+            for q in p + 1..self.order.len() {
+                let a = self.order[p];
+                let b = self.order[q];
+                if self.marbles[b].y - self.marbles[a].y >= rr {
+                    break;
                 }
-            }
-        }
-        for side in 0..2 {
-            let (px, py) = (PIVOTS[side][0], PIVOTS[side][1]);
-            let (dx, dy) = flipper_dir(side, self.flippers[side]);
-            let (ox, oy) = flipper_dir(side, self.prev_flippers[side]);
-            let tx = px + dx * FLIPPER_LEN;
-            let ty = py + dy * FLIPPER_LEN;
-            if let Some((nx, ny, t)) = capsule_contact(&mut self.ball, px, py, tx, ty, FLIPPER_R) {
-                // 접점이 이번 틱에 움직인 거리 = 표면 속도 (단위/틱)
-                let sx = (dx - ox) * FLIPPER_LEN * t;
-                let sy = (dy - oy) * FLIPPER_LEN * t;
-                bounce(&mut self.ball, nx, ny, FLIPPER_E, sx, sy);
-            }
-        }
-        for i in 0..POSTS.len() {
-            let pp = POSTS[i];
-            if let Some((nx, ny)) = circle_contact(&mut self.ball, pp[0], pp[1], pp[2]) {
-                bounce(&mut self.ball, nx, ny, POST_E, 0.0, 0.0);
-            }
-        }
-        for (i, bp) in BUMPERS.iter().enumerate() {
-            let dx = self.ball.x - bp[0];
-            let dy = self.ball.y - bp[1];
-            let d2 = dx * dx + dy * dy;
-            let rr = BALL_R + bp[2];
-            if d2 < rr * rr && d2 > 1e-12 {
+                let dx = self.marbles[a].x - self.marbles[b].x;
+                let dy = self.marbles[a].y - self.marbles[b].y;
+                let d2 = dx * dx + dy * dy;
+                if d2 >= rr * rr || d2 < 1e-12 {
+                    continue;
+                }
                 let d = d2.sqrt();
                 let nx = dx / d;
                 let ny = dy / d;
-                self.ball.x = bp[0] + nx * rr;
-                self.ball.y = bp[1] + ny * rr;
-                let kick = BUMPER_KICK * (0.9 + self.rng.next_f64() * 0.2);
-                self.ball.vx = nx * kick;
-                self.ball.vy = ny * kick;
-                if self.bumper_cool[i] == 0 {
-                    self.bumper_cool[i] = COOLDOWN;
-                    self.add(SCORE_BUMPER);
+                let half = (rr - d) * 0.5;
+                self.marbles[a].x += nx * half;
+                self.marbles[a].y += ny * half;
+                self.marbles[b].x -= nx * half;
+                self.marbles[b].y -= ny * half;
+                let vn = dot(
+                    self.marbles[a].vx - self.marbles[b].vx,
+                    self.marbles[a].vy - self.marbles[b].vy,
+                    nx,
+                    ny,
+                );
+                if vn < 0.0 {
+                    let j = (1.0 + MARBLE_E) * vn * 0.5;
+                    self.marbles[a].vx -= j * nx;
+                    self.marbles[a].vy -= j * ny;
+                    self.marbles[b].vx += j * nx;
+                    self.marbles[b].vy += j * ny;
                 }
             }
         }
     }
 
-    #[allow(clippy::needless_range_loop)]
-    fn sensors(&mut self) {
-        for i in 0..3 {
-            let s = SENSORS[i];
-            let dx = self.ball.x - s[0];
-            let dy = self.ball.y - s[1];
-            let rr = BALL_R + s[2];
-            let inside = dx * dx + dy * dy < rr * rr;
-            if inside && !self.inside_sensor[i] {
-                self.add(SCORE_SENSOR);
-                self.lights[i] = true;
-                if self.lights.iter().all(|&l| l) {
-                    self.add(SCORE_ALL_LIT);
-                    self.lights = [false; 3];
-                    if self.multiplier < MAX_MULTIPLIER {
-                        self.multiplier += 1;
-                    }
-                }
+    /// 최종 순위: 도착 순서, 이어서 아직 못 온 구슬은 결승선에 가까운 순 (같으면 번호 순)
+    pub fn ranking(&self) -> Vec<usize> {
+        let mut out = self.finished.clone();
+        let mut rest: Vec<usize> = (0..self.marbles.len())
+            .filter(|&i| self.marbles[i].active)
+            .collect();
+        let ms = &self.marbles;
+        rest.sort_by(|&a, &b| {
+            let (ya, yb) = (ms[a].y, ms[b].y);
+            if ya > yb {
+                std::cmp::Ordering::Less
+            } else if ya < yb {
+                std::cmp::Ordering::Greater
+            } else {
+                a.cmp(&b)
             }
-            self.inside_sensor[i] = inside;
-        }
+        });
+        out.extend(rest);
+        out
     }
 }
 
-/// 서버 검증 결과
+/// 확정 결과
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Replay {
-    pub score: u64,
-    /// 게임이 끝난 틱 (끝나지 않았으면 MAX_TICKS)
+pub struct RaceResult {
+    /// 구슬 번호 → 이름 (이름 목록을 펼친 순서)
+    pub marbles: Vec<String>,
+    /// 1등부터 꼴찌까지 구슬 번호
+    pub ranking: Vec<usize>,
+    /// 당첨 구슬 번호 (당첨 기준 순서대로)
+    pub winners: Vec<usize>,
     pub ticks: u32,
-    pub game_over: bool,
-    pub hits: u32,
+    /// 시간 제한으로 끝났는지
+    pub timed_out: bool,
 }
 
-/// 입력 기록 검증: 틱이 줄어들지 않고 범위 안이며 개수 제한 이내
-pub fn validate_inputs(inputs: &[Input]) -> GameResult<()> {
-    if inputs.len() > MAX_INPUTS {
-        return Err(GameError::invalid(
-            "inputs",
-            format!("입력이 너무 많습니다 (최대 {MAX_INPUTS}개)"),
-        ));
+pub fn winners_of(ranking: &[usize], mode: WinnerMode, count: usize) -> Vec<usize> {
+    match mode {
+        WinnerMode::First => ranking.iter().take(count).copied().collect(),
+        WinnerMode::Last => ranking.iter().rev().take(count).copied().collect(),
     }
-    let mut last = 0;
-    for i in inputs {
-        if i.tick < last {
-            return Err(GameError::invalid("inputs", "입력 순서가 시간순이 아닙니다"));
-        }
-        if i.tick >= MAX_TICKS {
-            return Err(GameError::invalid(
-                "inputs",
-                "게임 시간 제한을 넘은 입력이 있습니다",
-            ));
-        }
-        last = i.tick;
-    }
-    Ok(())
 }
 
-/// 시드와 입력으로 한 판을 처음부터 다시 돌립니다. 공 3개를 모두 잃거나 `MAX_TICKS` 에 닿으면 끝.
-pub fn replay(seed: u64, inputs: &[Input]) -> GameResult<Replay> {
-    validate_inputs(inputs)?;
-    let mut g = Pinball::new(seed);
-    let mut next = 0;
-    let mut buf: Vec<Action> = Vec::new();
-    while !g.game_over && g.tick < MAX_TICKS {
-        buf.clear();
-        while next < inputs.len() && inputs[next].tick == g.tick {
-            buf.push(inputs[next].action);
-            next += 1;
-        }
-        g.step(&buf);
+/// 서버가 결과를 확정할 때 쓰는 함수. 모든 구슬이 도착하거나 5분이 지나면 끝.
+pub fn run(config: &RouletteConfig, seed: u64) -> GameResult<RaceResult> {
+    let marbles = config.validate()?;
+    let mut race = Race::new(config.map, marbles.len(), config.skills, seed);
+    while !race.is_done() {
+        race.step();
     }
-    Ok(Replay {
-        score: g.score,
-        ticks: g.tick,
-        game_over: g.game_over,
-        hits: g.hits,
+    let ranking = race.ranking();
+    Ok(RaceResult {
+        winners: winners_of(&ranking, config.winner_mode, config.winner_count),
+        marbles,
+        ticks: race.tick,
+        timed_out: race.finished.len() < race.marbles.len(),
+        ranking,
     })
 }
 
@@ -497,289 +673,179 @@ pub fn replay(seed: u64, inputs: &[Input]) -> GameResult<Replay> {
 mod tests {
     use super::*;
 
-    /// 시드로 만든 그럴듯한 입력: 발사 후 플리퍼를 주기적으로 침
-    pub fn bot_inputs(seed: u64, ticks: u32) -> Vec<Input> {
-        let mut r = SeededRng::new(seed);
-        let mut out = Vec::new();
-        let mut t = 10;
-        while t < ticks {
-            out.push(Input {
-                tick: t,
-                action: Action::PlungerDown,
-            });
-            let hold = 20 + r.below(41) as u32;
-            out.push(Input {
-                tick: t + hold,
-                action: Action::PlungerUp,
-            });
-            t += hold + 30;
-            for _ in 0..20 {
-                let side = r.below(2);
-                let (d, u) = if side == 0 {
-                    (Action::LeftDown, Action::LeftUp)
-                } else {
-                    (Action::RightDown, Action::RightUp)
-                };
-                out.push(Input { tick: t, action: d });
-                out.push(Input {
-                    tick: t + 8 + r.below(20) as u32,
-                    action: u,
-                });
-                t += 40 + r.below(60) as u32;
-            }
-        }
-        out.retain(|i| i.tick < ticks);
-        out.sort_by_key(|i| i.tick);
-        out
-    }
-
-    #[test]
-    fn flipper_table_is_unit_length() {
-        for d in FLIPPER_DIRS {
-            let len = (d[0] * d[0] + d[1] * d[1]).sqrt();
-            assert!((len - 1.0).abs() < 1e-12);
+    fn cfg(raw: &str, map: MapId, skills: bool) -> RouletteConfig {
+        RouletteConfig {
+            entries: parse_entries(raw).unwrap(),
+            map,
+            winner_mode: WinnerMode::First,
+            winner_count: 1,
+            skills,
         }
     }
 
     #[test]
-    fn untouched_ball_rests_in_lane() {
-        let mut g = Pinball::new(1);
-        for _ in 0..600 {
-            g.step(&[]);
+    fn rotation_table_is_unit_circle() {
+        for d in DIRS {
+            assert!(((d[0] * d[0] + d[1] * d[1]).sqrt() - 1.0).abs() < 1e-12);
         }
-        assert!(g.in_lane(), "발사 전 공은 플런저 레인에 머묾: {:?}", g.ball);
-        assert!(g.ball.vy.abs() < 0.5);
-        assert_eq!(g.score, 0);
-    }
-
-    #[test]
-    fn full_launch_reaches_playfield() {
-        let mut g = Pinball::new(1);
-        for _ in 0..30 {
-            g.step(&[]);
-        }
-        g.step(&[Action::PlungerDown]);
-        for _ in 0..70 {
-            g.step(&[]);
-        }
-        g.step(&[Action::PlungerUp]);
-        let mut min_y = f64::MAX;
-        let mut left_lane = false;
-        for _ in 0..240 {
-            g.step(&[]);
-            min_y = min_y.min(g.ball.y);
-            left_lane |= g.ball.x < 340.0;
-        }
-        assert!(min_y < 150.0, "위쪽까지 올라감: {min_y}");
-        assert!(left_lane, "윗벽에 꺾여 플레이 영역으로 들어감");
-    }
-
-    #[test]
-    fn game_ends_without_flipping() {
-        // 발사만 계속하고 플리퍼를 안 치면 결국 공 3개를 모두 잃음
-        let mut inputs = Vec::new();
-        let mut t = 10;
-        while t < 20_000 {
-            inputs.push(Input {
-                tick: t,
-                action: Action::PlungerDown,
-            });
-            inputs.push(Input {
-                tick: t + 60,
-                action: Action::PlungerUp,
-            });
-            t += 200;
-        }
-        let r = replay(7, &inputs).unwrap();
-        assert!(r.game_over, "{r:?}");
-        assert!(r.ticks < 20_000);
-    }
-
-    #[test]
-    fn replay_is_deterministic_and_seed_dependent() {
-        let inputs = bot_inputs(3, 30_000);
-        let a = replay(99, &inputs).unwrap();
-        let b = replay(99, &inputs).unwrap();
-        assert_eq!(a, b);
-        let c = replay(100, &inputs).unwrap();
-        assert_ne!(
-            (a.score, a.ticks),
-            (c.score, c.ticks),
-            "시드가 다르면 같은 입력도 다른 결과"
+        assert_eq!(
+            spin_step(
+                &Spinner {
+                    x: 0.0,
+                    y: 0.0,
+                    half: 1.0,
+                    speed: -3,
+                    phase: 1
+                },
+                1
+            ),
+            254
         );
-        assert!(a.score > 0, "봇도 점수를 냄: {a:?}");
     }
 
     #[test]
-    fn ball_stays_inside_table() {
-        for seed in 0..20u64 {
-            let inputs = bot_inputs(seed, 12_000);
-            let mut g = Pinball::new(seed);
-            let mut next = 0;
-            while !g.game_over && g.tick < 12_000 {
-                let mut buf = Vec::new();
-                while next < inputs.len() && inputs[next].tick == g.tick {
-                    buf.push(inputs[next].action);
-                    next += 1;
-                }
-                g.step(&buf);
+    fn parse_entries_formats() {
+        let e = parse_entries("수박*2, 키위,귤*3\n 사과 ,키위*2").unwrap();
+        assert_eq!(
+            e,
+            vec![
+                Entry {
+                    name: "수박".into(),
+                    count: 2
+                },
+                Entry {
+                    name: "키위".into(),
+                    count: 3
+                },
+                Entry {
+                    name: "귤".into(),
+                    count: 3
+                },
+                Entry {
+                    name: "사과".into(),
+                    count: 1
+                },
+            ]
+        );
+        assert_eq!(
+            parse_entries("a*b").unwrap()[0].name,
+            "a*b",
+            "숫자가 아니면 이름의 일부"
+        );
+        assert!(parse_entries("*3").is_err());
+        assert!(parse_entries(" , ,").unwrap().is_empty());
+    }
+
+    #[test]
+    fn validation() {
+        assert!(cfg("a", MapId::Sprint, false).validate().is_err(), "구슬 1개");
+        assert!(
+            cfg("a*2", MapId::Sprint, false).validate().is_ok(),
+            "한 이름 2개도 가능"
+        );
+        assert!(cfg("a*21", MapId::Sprint, false).validate().is_err());
+        let many: Vec<String> = (0..101).map(|i| format!("p{i}")).collect();
+        assert!(cfg(&many.join(","), MapId::Sprint, false).validate().is_err());
+        let mut c = cfg("a,b,c", MapId::Sprint, false);
+        c.winner_count = 3;
+        assert!(c.validate().is_err(), "전원 당첨은 의미 없음");
+    }
+
+    #[test]
+    fn start_slots_are_distinct_and_inside() {
+        let r = Race::new(MapId::Classic, MAX_MARBLES, false, 9);
+        for (i, a) in r.marbles.iter().enumerate() {
+            assert!(a.x > 15.0 && a.x < 385.0 && a.y < 200.0);
+            for b in &r.marbles[i + 1..] {
+                let d = ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)).sqrt();
+                assert!(d >= MARBLE_R * 2.0, "출발 자리가 겹치지 않음");
+            }
+        }
+    }
+
+    #[test]
+    fn everyone_finishes_on_both_maps() {
+        for map in MapId::ALL {
+            for (seed, raw, skills) in [
+                (1u64, "a,b,c,d,e,f,g,h", false),
+                (2, "수박*5,키위*5,귤*5,사과*5", true),
+            ] {
+                let r = run(&cfg(raw, map, skills), seed).unwrap();
                 assert!(
-                    g.ball.x > 10.0 && g.ball.x < 390.0,
-                    "seed {seed} tick {} {:?}",
-                    g.tick,
-                    g.ball
+                    !r.timed_out,
+                    "{map:?} seed {seed}: 시간 안에 모두 도착 ({} 틱)",
+                    r.ticks
                 );
-                assert!(g.ball.y > 8.0, "seed {seed} tick {} {:?}", g.tick, g.ball);
-                assert!(g.ball.x.is_finite() && g.ball.y.is_finite());
+                let mut sorted = r.ranking.clone();
+                sorted.sort();
+                assert_eq!(sorted, (0..r.marbles.len()).collect::<Vec<_>>(), "순위는 순열");
             }
         }
     }
 
     #[test]
-    fn flipper_can_hit_ball_up() {
-        // 왼쪽 플리퍼 위에 공을 올려놓고 치면 위로 튕김
-        let mut g = Pinball::new(5);
-        g.ball = Ball {
-            x: 140.0,
-            y: 610.0,
-            vx: 0.0,
-            vy: 0.0,
-        };
-        for _ in 0..4 {
-            g.step(&[]);
+    fn hundred_marbles_finish() {
+        let names: Vec<String> = (0..50).map(|i| format!("p{i}*2")).collect();
+        let r = run(&cfg(&names.join(","), MapId::Classic, true), 77).unwrap();
+        assert_eq!(r.marbles.len(), 100);
+        assert!(!r.timed_out, "{} 틱", r.ticks);
+    }
+
+    #[test]
+    fn marbles_stay_inside_and_finite() {
+        let mut race = Race::new(MapId::Classic, 40, true, 5);
+        while !race.is_done() {
+            race.step();
+            for m in race.marbles.iter().filter(|m| m.active) {
+                assert!(m.x.is_finite() && m.y.is_finite());
+                assert!(m.x > 9.0 && m.x < 391.0, "tick {} {:?}", race.tick, m);
+                assert!(m.y > 0.0);
+            }
         }
-        g.step(&[Action::LeftDown]);
-        let mut min_vy = 0.0f64;
-        for _ in 0..10 {
-            g.step(&[]);
-            min_vy = min_vy.min(g.ball.vy);
+    }
+
+    #[test]
+    fn deterministic_and_seed_dependent() {
+        let c = cfg("a,b,c,d,e,f,g,h,i,j", MapId::Classic, true);
+        let r1 = run(&c, 42).unwrap();
+        assert_eq!(r1, run(&c, 42).unwrap());
+        let others: Vec<Vec<usize>> = (43..48).map(|s| run(&c, s).unwrap().ranking).collect();
+        assert!(
+            others.iter().any(|o| *o != r1.ranking),
+            "시드가 바뀌면 결과도 바뀜"
+        );
+    }
+
+    #[test]
+    fn side_gaps_wider_than_marble() {
+        for map in MapId::ALL {
+            let m = map_def(map);
+            for p in &m.pegs {
+                let left = p[0] - p[2] - (10.0 + WALL_R);
+                let right = (390.0 - WALL_R) - (p[0] + p[2]);
+                assert!(
+                    left > MARBLE_R * 2.5 && right > MARBLE_R * 2.5,
+                    "{map:?} 핀 {p:?}"
+                );
+            }
         }
-        assert!(min_vy < -5.0, "플리퍼가 공을 위로 쳐 올림: {min_vy}");
     }
 
     #[test]
-    fn bumper_scores_and_multiplier_applies() {
-        let mut g = Pinball::new(5);
-        g.ball = Ball {
-            x: 125.0,
-            y: 200.0, // 범퍼 중심과 30 떨어짐 → 한 틱 안에 닿음
-            vx: 0.0,
-            vy: 3.0,
-        };
-        g.step(&[]);
-        assert_eq!(g.score, SCORE_BUMPER);
-        let mut g = Pinball::new(5);
-        g.multiplier = 3;
-        g.ball = Ball {
-            x: 125.0,
-            y: 200.0, // 범퍼 중심과 30 떨어짐 → 한 틱 안에 닿음
-            vx: 0.0,
-            vy: 3.0,
-        };
-        g.step(&[]);
-        assert_eq!(g.score, SCORE_BUMPER * 3);
+    fn winners_by_mode() {
+        let ranking = vec![3, 1, 0, 2];
+        assert_eq!(winners_of(&ranking, WinnerMode::First, 2), vec![3, 1]);
+        assert_eq!(winners_of(&ranking, WinnerMode::Last, 1), vec![2]);
     }
 
     #[test]
-    fn all_sensors_lit_gives_bonus() {
-        let mut g = Pinball::new(5);
-        g.lights = [true, true, false];
-        g.ball = Ball {
-            x: 240.0,
-            y: 110.0,
-            vx: 0.0,
-            vy: 0.0,
-        };
-        g.step(&[]);
-        assert_eq!(g.score, SCORE_SENSOR + SCORE_ALL_LIT);
-        assert_eq!(g.multiplier, 2);
-        assert_eq!(g.lights, [false; 3]);
-    }
-
-    #[test]
-    fn input_validation() {
-        assert!(validate_inputs(&[
-            Input {
-                tick: 5,
-                action: Action::LeftDown
-            },
-            Input {
-                tick: 4,
-                action: Action::LeftUp
-            }
-        ])
-        .is_err());
-        assert!(validate_inputs(&[Input {
-            tick: MAX_TICKS,
-            action: Action::LeftDown
-        }])
-        .is_err());
-        assert!(validate_inputs(&vec![
-            Input {
-                tick: 0,
-                action: Action::LeftDown
-            };
-            MAX_INPUTS + 1
-        ])
-        .is_err());
-        assert!(validate_inputs(&[
-            Input {
-                tick: 0,
-                action: Action::LeftDown
-            },
-            Input {
-                tick: 0,
-                action: Action::LeftUp
-            }
-        ])
-        .is_ok());
-    }
-
-    #[test]
-    fn launch_jitter_survives_speed_cap() {
-        // 최대 세기로 쏴도 속도 상한에 잘리지 않아야 시드마다 경로가 달라짐 (같은 입력 재사용 방지)
-        let max_launch = (6.0 + PLUNGER_MAX as f64 * 0.12) * 1.03;
-        assert!(max_launch < SPEED_CAP, "{max_launch}");
-        let mut paths = std::collections::BTreeSet::new();
-        for seed in 0..10u64 {
-            let mut g = Pinball::new(seed);
-            for _ in 0..30 {
-                g.step(&[]);
-            }
-            g.step(&[Action::PlungerDown]);
-            for _ in 0..70 {
-                g.step(&[]);
-            }
-            g.step(&[Action::PlungerUp]);
-            for _ in 0..200 {
-                g.step(&[]);
-            }
-            paths.insert(format!("{:?}", g.ball));
+    fn fairness_across_start_slots() {
+        // 이름 순서(구슬 번호)가 유리하지 않아야 함: 200판 동안 1등 횟수가 고르게
+        let c = cfg("a,b,c,d", MapId::Sprint, false);
+        let mut wins = [0u32; 4];
+        for seed in 0..200u64 {
+            wins[run(&c, seed).unwrap().ranking[0]] += 1;
         }
-        assert_eq!(paths.len(), 10);
-    }
-
-    #[test]
-    fn posts_push_ball_off_outer_wall() {
-        // 왼쪽 벽을 타고 내려오는 공이 기둥에 맞아 안쪽(오른쪽)으로 튕김
-        let mut g = Pinball::new(1);
-        g.ball = Ball {
-            x: 31.0,
-            y: 200.0,
-            vx: 0.0,
-            vy: 6.0,
-        };
-        for _ in 0..20 {
-            g.step(&[]);
-        }
-        assert!(g.ball.vx > 0.5, "{:?}", g.ball);
-    }
-
-    #[test]
-    fn idle_game_hits_tick_limit() {
-        let r = replay(1, &[]).unwrap();
-        assert!(!r.game_over);
-        assert_eq!(r.ticks, MAX_TICKS);
-        assert_eq!(r.score, 0);
+        assert!(wins.iter().all(|&w| (25..=80).contains(&w)), "{wins:?}");
     }
 }

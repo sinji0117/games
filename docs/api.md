@@ -133,27 +133,43 @@
 ## WebSocket — `GET /api/ws/{game}/{id}`
 `game` 은 `ladder` | `bingo`. 방이 바뀔 때마다 `{ "type": "changed", … }` 를 보냅니다. 메시지 형식과 동작은 [redis-pubsub.md](redis-pubsub.md).
 
-## 핀볼
+## 핀볼 룰렛
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| POST | `/api/pinball/sessions` | 판 열기 → 201 `{ id, seed, table: "v1", max_ticks, ticks_per_second }` |
-| POST | `/api/pinball/sessions/{id}/finish` | 입력 기록 제출 → 서버가 다시 계산한 점수 |
-| GET | `/api/pinball/scores` | `{ today: [...], all: [...] }` 상위 10, 항목은 `{ name, score, seconds, created_at }` |
+| POST | `/api/pinball/games` | 룰렛 만들기 — 서버가 시드를 뽑아 결과 확정 → 201 `RouletteView` |
+| GET | `/api/pinball/games/{id}` | 같은 `RouletteView` (공유 링크로 재생) |
 
-### 제출
+### 요청
 ```json
 {
-  "name": "민지",
-  "inputs": [{ "tick": 30, "action": "plunger_down" }, { "tick": 95, "action": "plunger_up" }, { "tick": 410, "action": "left_down" }],
-  "claimed_score": 5830
+  "entries": [{ "name": "수박", "count": 2 }, { "name": "키위", "count": 1 }],
+  "map": "classic",
+  "winner_mode": "first",
+  "winner_count": 1,
+  "skills": true
 }
 ```
-- `action`: `left_down` `left_up` `right_down` `right_up` `plunger_down` `plunger_up`. 입력은 그 틱이 시작될 때 적용
-- 틱은 줄어들지 않아야 하고 108,000 미만, 최대 50,000개
-- 응답 `{ score, ticks, game_over, matches_client, rank_today, rank_all }` — `score` 는 서버 계산값, `claimed_score` 는 비교에만 씀
-- 409: 이미 제출한 판. 422: 입력 형식 오류, 또는 게임 시간이 실제로 흐른 시간보다 김 (판이 소모되므로 다시 열어야 함)
-- 판 수명 1시간. 레이트 리밋: 열기·제출 각각 IP 당 30/분
+- `map`: `classic` | `sprint`, `winner_mode`: `first` | `last`
+- 구슬 2~100개, 이름당 1~20개, `winner_count` 는 1 ~ 구슬 수 − 1
+
+### `RouletteView`
+```json
+{
+  "id": "…", "kind": "pinball",
+  "config": { "entries": […], "map": "classic", "winner_mode": "first", "winner_count": 1, "skills": true },
+  "seed": "0fc57d4f76893f97",
+  "marbles": ["수박", "수박", "키위"],
+  "ranking": [2, 0, 1],
+  "winners": [2],
+  "ticks": 1616,
+  "timed_out": false,
+  "created_at": 1762675200
+}
+```
+- `marbles[i]` = 구슬 `i` 의 이름 (`entries` 를 펼친 순서), `ranking` 은 1등부터 구슬 번호
+- 브라우저는 `Race(map, marbles.length, skills, seed)` 를 재생해 `ranking` 과 같은지 확인
+- 레이트 리밋: 만들기 IP 당 30/분
 
 ## 예정
 - 6단계: `/api/auth/*`, `/api/rankings/{game}`
