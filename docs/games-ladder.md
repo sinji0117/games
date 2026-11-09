@@ -50,6 +50,23 @@ path += (x, rows + 1)
 4. **검증(클라이언트)**: `sha256(seed:nonce) == commitment` 확인 후, `LadderGame::create(config, seed)` 로 재생성한
    `generated` 가로선이 응답과 같은지 비교. 결과 공개 이후 상태는 바뀌지 않습니다.
 
+## 프론트엔드 (`apps/site`)
+
+| 파일 | 역할 |
+| --- | --- |
+| `src/lib/ladder/rng.ts`, `engine.ts` | Rust 엔진의 TS 포팅 (BigInt 로 u64 연산). 생성·추적 결과가 Rust 와 비트 단위로 같음 |
+| `src/lib/ladder/verify.ts` | 공개 후 해시·재생성 사다리·경로를 브라우저에서 다시 계산해 검증 |
+| `src/lib/ladder/geometry.ts` | 좌표 → SVG 픽셀, 경로 길이·보간, 포인터 → 칸 판정 |
+| `src/pages/ladder/LadderBoard.tsx` | 사다리 SVG. 이름/결과 라벨은 `repeat(N, 1fr)` 그리드라 세로줄 중심과 정확히 정렬 |
+| `src/pages/ladder/LadderRoom.tsx` | 방 화면: 2.5초 폴링(공개 전, 탭이 보일 때만), 가로선 긋기, 공개, 애니메이션, 검증 표시 |
+| `src/lib/ladder/tests/` | `rust-fixtures.json`(Rust 에서 뽑은 RNG 수열·사다리 24개)과 비교하는 교차 검증 |
+
+- 방장 토큰은 `localStorage["ladder.host.{id}"]` 에 저장합니다. 다른 브라우저에서 열면 공개 버튼이 보이지 않습니다.
+- 공개 전 화면은 기본 가로선 영역을 빗금 가림막으로 덮고, 참가자가 그은 가로선만 그 위에 그립니다.
+- 터치 기기는 hover 가 없으므로 클릭 좌표로 칸을 다시 계산합니다.
+- `prefers-reduced-motion` 이면 경로 애니메이션을 생략하고 바로 결과를 보여줍니다.
+- Rust 엔진을 바꾸면 기준값을 다시 생성합니다: `cargo run -p game-core --example ladder_fixtures > apps/site/src/lib/ladder/tests/rust-fixtures.json`
+
 ## 테스트로 보장하는 불변식
 - 모든 크기(2~16명) × 200개 시드 × 밀도/행 수 경계값에서: 인접 가로선 없음, 결과가 순열, 모든 인접 쌍이 1회 이상 연결
 - 경로: 시작·끝 좌표 일치, 항상 아래로 진행, 가로 이동은 1칸이며 실제 가로선 위에서만

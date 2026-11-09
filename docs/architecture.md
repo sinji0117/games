@@ -4,6 +4,7 @@
 
 ```text
 [브라우저: apps/site (React 19)]
+  lib/ladder   Rust 엔진 TS 포팅 → 결과 공개 후 브라우저에서 재계산·검증
         │ REST (JSON)  ·  WebSocket (4단계~)
         ▼
 [crates/api  — Axum]

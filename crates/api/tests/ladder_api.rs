@@ -86,7 +86,9 @@ async fn full_ladder_flow_is_verifiable() {
         created["commitment"].as_str().unwrap()
     );
     let seed = u64::from_str_radix(seed_hex, 16).unwrap();
-    let config: LadderConfig = serde_json::from_value(cfg).unwrap();
+    let mut config: LadderConfig = serde_json::from_value(cfg).unwrap();
+    config.rows = revealed["rows"].as_u64().map(|r| r as usize);
+    config.density = revealed["density"].as_f64();
     let replay = LadderGame::create(config, seed).unwrap();
     let served: Vec<(u64, u64)> = revealed["rungs"]
         .as_array()
@@ -128,6 +130,7 @@ async fn validation_and_not_found() {
     .await;
     assert_eq!(st, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body["error"]["code"], "invalid_input");
+    assert_eq!(body["error"]["field"], "participants");
 
     let (st, _) = call(
         &app,

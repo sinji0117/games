@@ -36,6 +36,8 @@ pub struct LadderView {
     pub outcomes: Vec<String>,
     pub columns: usize,
     pub rows: usize,
+    /// 기본 가로선 생성 확률 (재현 검증용)
+    pub density: f64,
     /// sha256("{seed_hex}:{nonce_hex}") — 결과 공개 전에 고정됨
     pub commitment: String,
     /// 공개 전: 참가자가 추가한 가로선만. 공개 후: 전체 가로선.
@@ -82,6 +84,7 @@ fn view(id: Uuid, s: &LadderSession) -> LadderView {
         outcomes: g.outcomes().to_vec(),
         columns: g.columns(),
         rows: g.rows(),
+        density: g.density(),
         commitment: s.secret.commitment(),
         rungs,
         created_at: s.created_at,

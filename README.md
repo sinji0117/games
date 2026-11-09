@@ -1,6 +1,6 @@
 # Games — 멀티 미니게임 플랫폼
 
-![version](https://img.shields.io/badge/version-0.1.0-blue)
+![version](https://img.shields.io/badge/version-0.2.0-blue)
 
 사다리 · 빙고 · 핀볼 같은 미니게임을 한곳에서 즐기고, 방 생성 · 실시간 승패 기록 · 포인트/랭킹을 제공하는 아케이드 플랫폼입니다.
 `정비로` 플랫폼 아키텍처(Rust Axum + React 19/Vite + MariaDB + Redis 7, 모노레포)를 계승합니다.
@@ -10,8 +10,8 @@
 | 단계 | 내용 | 상태 |
 | --- | --- | --- |
 | 1 | 모노레포 골격, 공통 코어, **사다리 엔진**, API 골격(인메모리), 문서 | ✅ 0.1.0 |
-| 2 | 사다리 프론트엔드 (`apps/site` 로비 + 사다리 화면, `packages/ui`) | ⏳ 다음 |
-| 3 | MariaDB 영구 저장 · Redis 세션/랭킹 · 폴백 | 예정 |
+| 2 | 사다리 프론트엔드 (`apps/site` 로비 + 사다리 화면, 브라우저 결과 검증) | ✅ 0.2.0 |
+| 3 | MariaDB 영구 저장 · Redis 세션/랭킹 · 폴백 | ⏳ 다음 |
 | 4 | 빙고 엔진 + 실시간 방 동기화 (Redis Pub/Sub · WebSocket) | 예정 |
 | 5 | 핀볼 (Matter.js) + 점수 검증 | 예정 |
 | 6 | 계정 · 포인트 · 랭킹 · 배포 | 예정 |
@@ -27,7 +27,7 @@
 ```text
 crates/core      공통 에러 · 결정적 난수 · game_common 인터페이스 · 게임 엔진 (std 전용)
 crates/api       Axum API 서버
-apps/            프론트엔드 앱 (2단계)
+apps/site        로비 + 게임 화면 (React 19, Vite)
 packages/ui      공용 디자인 토큰 (ui.css)
 scripts/         bump-version.py
 docs/            설계 문서 (docs/README.md 참고)
@@ -46,6 +46,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 # API 서버 (기본 0.0.0.0:8080)
 cp .env.example .env
 cargo run -p game-api
+
+# 프론트엔드 (다른 터미널, http://localhost:5173 — /api 는 8080 으로 프록시)
+pnpm install
+pnpm dev:site
+pnpm test          # TS 사다리 엔진이 Rust 와 같은 결과를 내는지 교차 검증
+pnpm typecheck
 
 # 동작 확인
 curl localhost:8080/api/health

@@ -2,8 +2,9 @@
 
 기본 경로 `/api`. 요청·응답은 JSON. 에러 형식:
 ```json
-{ "error": { "code": "invalid_input", "message": "잘못된 입력 `participants`: 2~16명이어야 합니다 (현재 1명)" } }
+{ "error": { "code": "invalid_input", "message": "2~16명이어야 합니다 (현재 1명)", "field": "participants" } }
 ```
+`message` 는 화면에 그대로 보여줄 수 있는 문장이고, `field` 는 입력 오류(`invalid_input`)일 때만 붙습니다.
 
 | 코드 | HTTP |
 | --- | --- |
