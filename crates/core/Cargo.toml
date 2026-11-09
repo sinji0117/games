@@ -1,0 +1,18 @@
+[package]
+name = "game-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "미니게임 플랫폼 공통 로직: 에러, 결정적 난수, 게임 엔진"
+
+[lib]
+name = "game_core"
+
+[features]
+default = []
+# API 서버에서 켜서 응답 직렬화에 사용합니다. 엔진 자체는 std 만으로 동작합니다.
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }

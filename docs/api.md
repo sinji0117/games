@@ -1,0 +1,72 @@
+# API 명세
+
+기본 경로 `/api`. 요청·응답은 JSON. 에러 형식:
+```json
+{ "error": { "code": "invalid_input", "message": "잘못된 입력 `participants`: 2~16명이어야 합니다 (현재 1명)" } }
+```
+
+| 코드 | HTTP |
+| --- | --- |
+| `invalid_input` | 422 |
+| `invalid_state` | 409 |
+| `not_found` | 404 |
+| `forbidden` | 403 |
+| `internal` | 500 |
+
+## 공통
+### `GET /api/health`
+```json
+{ "status": "ok", "version": "0.1.0", "games": ["ladder", "bingo", "pinball"] }
+```
+
+## 사다리
+
+### `POST /api/ladder/games` → 201
+요청
+```json
+{ "participants": ["철수", "영희", "민수"], "outcomes": ["꽝", "당첨", "커피"], "rows": 12, "density": 0.35 }
+```
+`rows`, `density` 는 생략 가능. 응답(`LadderView` + `host_token`)
+```json
+{
+  "id": "6f1c…", "kind": "ladder", "phase": "lobby",
+  "participants": ["철수","영희","민수"], "outcomes": ["꽝","당첨","커피"],
+  "columns": 3, "rows": 12,
+  "commitment": "9b2e…(sha256 hex)",
+  "rungs": [],
+  "created_at": 1762675200,
+  "host_token": "a3f9…(64 hex)"
+}
+```
+`host_token` 은 이 응답에서만 내려갑니다. 방장 브라우저에 저장하세요.
+
+### `GET /api/ladder/games/{id}` → 200 `LadderView`
+공개 전 `rungs` 에는 `source: "player"` 가로선만 있습니다. 공개 후에는 전체 + `reveal` 필드가 붙습니다.
+
+### `POST /api/ladder/games/{id}/rungs` → 200 `LadderView`
+```json
+{ "row": 3, "col": 1 }
+```
+- 422 `invalid_input`: 범위 밖, 이미 있음, 인접 가로선과 충돌 (숨은 가로선 위치 보호를 위해 사유는 통일)
+- 409 `invalid_state`: 이미 공개됨, 추가 한도(세로줄 수 × 3) 초과
+
+### `POST /api/ladder/games/{id}/reveal` → 200 `LadderView`
+헤더 `x-host-token: <host_token>` 필요 (아니면 403). 여러 번 호출해도 같은 결과.
+```json
+{
+  "phase": "finished",
+  "rungs": [{ "row": 0, "col": 0, "source": "generated" }, { "row": 3, "col": 1, "source": "player" }],
+  "reveal": {
+    "seed": "00000000deadbeef",
+    "nonce": "0707…(32 hex)",
+    "results": [
+      { "start": 0, "end": 1, "participant": "철수", "outcome": "당첨",
+        "path": [{"x":0,"y":0},{"x":0,"y":1},{"x":1,"y":1},{"x":1,"y":13}] }
+    ]
+  }
+}
+```
+
+## 예정
+- 3단계: `/api/auth/*`, `/api/rankings/{game}`
+- 4단계: `GET /api/ws/rooms/{id}` (WebSocket) — 메시지 형식은 `redis-pubsub.md`
