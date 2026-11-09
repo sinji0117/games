@@ -1,6 +1,6 @@
 //! 포인트 랭킹. 원본은 MariaDB `point_ledger`/`users.points`, Redis Sorted Set 은 빠른 조회용 캐시입니다.
 //!
-//! - 키: `rank:points:all`, `rank:points:week:{그 주 월요일}` (주간 키는 15일 뒤 만료)
+//! - 키 (접두사 `REDIS_KEY_PREFIX` 뒤): `rank:points:all`, `rank:points:week:{그 주 월요일}` (주간 키는 15일 뒤 만료)
 //! - 지급할 때 `ZINCRBY` 로 바로 반영. 실패하면 키를 지워 다음 조회 때 원본에서 다시 채움
 //! - 조회할 때 키가 없으면(재시작·만료·실패 후) 원본 전체로 다시 채운 뒤 읽음
 //! - Redis 가 없거나 실패하면 원본에서 바로 계산
@@ -76,7 +76,7 @@ impl Rankings<'_> {
         let mut pipe = ::redis::pipe();
         pipe.atomic();
         for period in [Period::All, Period::Week] {
-            let k = key(period, now);
+            let k = r.key(&key(period, now));
             // 키가 있을 때만 더함 (없으면 다음 조회 때 원본에서 통째로 채움)
             pipe.cmd("EVAL")
                 .arg("if redis.call('EXISTS', KEYS[1]) == 1 then return redis.call('ZINCRBY', KEYS[1], ARGV[1], ARGV[2]) end return 0")
@@ -89,7 +89,8 @@ impl Rankings<'_> {
         if let Err(e) = r.pipeline("redis 랭킹 반영", pipe).await {
             tracing::warn!(error = %e, "랭킹 캐시 반영 실패 — 캐시를 비워 다음 조회 때 다시 채움");
             let mut del = ::redis::cmd("DEL");
-            del.arg(key(Period::All, now)).arg(key(Period::Week, now));
+            del.arg(r.key(&key(Period::All, now)))
+                .arg(r.key(&key(Period::Week, now)));
             let _ = r.query::<i64>("redis 랭킹 비우기", del).await;
         }
     }
@@ -100,7 +101,7 @@ impl Rankings<'_> {
         period: Period,
         now: u64,
     ) -> Result<Vec<(u64, i64)>, StoreError> {
-        let k = key(period, now);
+        let k = r.key(&key(period, now));
         let mut exists = ::redis::cmd("EXISTS");
         exists.arg(&k);
         if r.query::<i64>("redis 랭킹 확인", exists).await? == 0 {

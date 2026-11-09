@@ -1,12 +1,14 @@
 # 배포 가이드
 
+> **Rpanel** 로 올린다면 [deploy-rpanel.md](deploy-rpanel.md) 를 보세요 (Docker 없이 실행 파일 하나). 이 문서는 Docker 방식입니다.
+
 ## 구성
 ```text
 [브라우저] ─ HTTPS ─▶ [nginx / Rpanel :443]
                          ├─ /api/ws/*  (WebSocket 업그레이드)
                          └─ /*         ─▶ app 컨테이너 127.0.0.1:8080
                                              ├─ /api/*  Axum API
-                                             └─ 그 밖   프론트엔드 정적 파일 (STATIC_DIR)
+                                             └─ 그 밖   프론트엔드 (바이너리에 내장)
 app ─▶ mariadb:10.11 (원본: 계정·포인트·결과)
 app ─▶ redis:7      (진행 중 방 · 실시간 알림 · 레이트 리밋 · 랭킹 캐시)
 ```
@@ -31,18 +33,19 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 새 마이그레이션은 앱이 시작할 때 자동 적용됩니다. 적용된 마이그레이션 파일은 고치지 않습니다.
 
 ## 이미지
-`Dockerfile` 은 3단계입니다: Node 22 로 프론트엔드 빌드 → Rust 로 `game-api` 릴리스 빌드(`--locked`) → `debian:bookworm-slim` 에 바이너리와 `dist/` 만 복사, 비루트(uid 10001) 사용자로 실행.
+`Dockerfile` 은 3단계입니다: Node 22 로 프론트엔드 빌드 → Rust 로 `game-api` 릴리스 빌드(`--locked`, `dist/` 를 바이너리에 내장) → `debian:bookworm-slim` 에 바이너리만 복사, 비루트(uid 10001) 사용자로 실행.
 CI 가 PR 마다 이미지를 빌드해 Dockerfile 이 깨지지 않았는지 확인합니다(푸시는 하지 않음).
 
 ## 환경 변수
 | 이름 | 기본값 | 설명 |
 | --- | --- | --- |
-| `API_BIND` | `0.0.0.0:8080` | |
-| `STATIC_DIR` | (이미지에서 `/srv/site`) | 있으면 프론트엔드도 서빙 |
+| `API_BIND` | `0.0.0.0:8080` | 없으면 `BIND_ADDR`, 그것도 없으면 `127.0.0.1:$PORT` (Rpanel) |
+| `STATIC_DIR` | – | 지정하면 내장된 화면 대신 이 폴더를 서빙 (화면만 바꿔 시험할 때) |
+| `REDIS_KEY_PREFIX` | `mg:` | 모든 Redis 키 · 채널 접두사 |
 | `DATABASE_URL` | – | 없으면 결과·계정이 메모리에만 (개발용) |
 | `REDIS_URL` | – | 없으면 MariaDB/메모리로 폴백 |
 | `SESSION_TTL_SECS` | 86400 | 게임 방 수명 |
-| `TRUST_PROXY` | false | 프록시 뒤면 true (nginx 가 `X-Forwarded-For` 를 `$remote_addr` 로 덮어써야 함) |
+| `TRUST_PROXY` | 127.0.0.1 에 열리면 true | 켜지면 `X-Real-IP`, 없으면 `X-Forwarded-For` 첫 주소를 IP 로 (nginx 가 `$remote_addr` 로 덮어써야 함) |
 | `CORS_ORIGINS` | `http://localhost:5173` | 다른 도메인에서 API 를 부를 때만 |
 | `RUST_LOG` | info | |
 

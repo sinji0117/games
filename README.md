@@ -1,6 +1,6 @@
 # Games — 멀티 미니게임 플랫폼
 
-![version](https://img.shields.io/badge/version-0.7.0-blue) ![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)
+![version](https://img.shields.io/badge/version-0.8.0-blue) ![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)
 
 사다리 · 빙고 · 핀볼 룰렛 같은 미니게임을 한곳에서 즐기고, 방 생성 · 실시간 승패 기록 · 포인트/랭킹을 제공하는 아케이드 플랫폼입니다.
 `정비로` 플랫폼 아키텍처(Rust Axum + React 19/Vite + MariaDB + Redis 7, 모노레포)를 계승합니다.
@@ -15,6 +15,7 @@
 | 4 | 빙고 엔진 + 실시간 방 동기화 (Redis Pub/Sub · WebSocket) | ✅ 0.4.0 |
 | 5 | 핀볼 룰렛 (마블 룰렛 형식, 결정적 물리 엔진 + 서버 확정 결과 검증) | ✅ 0.6.0 |
 | 6 | 계정 · 포인트 · 랭킹(Redis Sorted Set) · Docker 배포 · CI | ✅ 0.7.0 |
+| + | Rpanel 배포 (화면 내장 실행 파일 하나, `scripts/build-release.sh`) | ✅ 0.8.0 |
 
 > 랭킹은 "누구의 기록인가"가 정해져야 의미가 있어 계정과 함께 6단계로 옮겼습니다.
 
@@ -67,11 +68,20 @@ curl -X POST localhost:8080/api/ladder/games \
 
 ## 배포
 
+**Rpanel** (권장, 실행 파일 하나): 앱 종류 Rust · 빌드 명령 `bash scripts/build-release.sh` · 바이너리 이름 `game-api` · 헬스체크 `/api/health`.
+데이터베이스 탭에서 MariaDB 를 만들고 Redis 를 배정하면 끝입니다. 순서는 [docs/deploy-rpanel.md](docs/deploy-rpanel.md).
+
+```bash
+bash scripts/build-release.sh          # 화면 빌드 → game-api 에 내장 → target/release/game-api
+PORT=4100 ./target/release/game-api    # 127.0.0.1:4100 에서 화면 + API
+```
+
+**Docker**:
 ```bash
 cp deploy/env.production.example .env.production   # 비밀번호 바꾸기
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
-컨테이너 하나가 API 와 프론트엔드를 함께 서빙합니다(127.0.0.1:8080). 리버스 프록시 설정은 [deploy/nginx.conf](deploy/nginx.conf), 자세한 내용은 [docs/deployment.md](docs/deployment.md).
+컨테이너 하나가 API 와 (내장된) 프론트엔드를 함께 서빙합니다(127.0.0.1:8080). 리버스 프록시 설정은 [deploy/nginx.conf](deploy/nginx.conf), 자세한 내용은 [docs/deployment.md](docs/deployment.md).
 
 ## 버전 관리
 

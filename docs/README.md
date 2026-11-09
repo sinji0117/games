@@ -11,6 +11,7 @@
 | 07 | [games-pinball.md](games-pinball.md) | 핀볼 룰렛 규칙 · 공정성 · 결정적 물리 엔진 | ✅ |
 | 08 | [api.md](api.md) | REST / WebSocket 명세 | ✅ 사다리 · 빙고 · 핀볼 · WebSocket |
 | 09 | [redis-pubsub.md](redis-pubsub.md) | Redis 키 설계 · 동시성 · 폴백 · 실시간 동기화 | ✅ |
-| 10 | [deployment.md](deployment.md) | Rpanel / Docker 배포 | 📝 설계 초안 |
+| 10 | [deployment.md](deployment.md) | Docker 배포 · 환경 변수 | ✅ |
+| 10-1 | [deploy-rpanel.md](deploy-rpanel.md) | Rpanel Git 자동 배포 (Rust 앱 하나) | ✅ |
 
 새 문서를 추가하면 이 표도 갱신합니다.

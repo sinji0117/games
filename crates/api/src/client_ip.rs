@@ -16,15 +16,19 @@ impl FromRequestParts<AppState> for ClientIp {
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         if state.trust_proxy {
-            let forwarded = parts
-                .headers
-                .get("x-forwarded-for")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.split(',').next())
-                .map(str::trim)
-                .filter(|v| !v.is_empty());
-            if let Some(ip) = forwarded {
-                return Ok(ClientIp(ip.to_string()));
+            // nginx(Rpanel) 는 X-Real-IP 에 실제 접속 주소를 넣음. 없으면 X-Forwarded-For 첫 주소
+            let header = |name: &str| {
+                parts
+                    .headers
+                    .get(name)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.split(',').next())
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(str::to_string)
+            };
+            if let Some(ip) = header("x-real-ip").or_else(|| header("x-forwarded-for")) {
+                return Ok(ClientIp(ip));
             }
         }
         let ip = parts

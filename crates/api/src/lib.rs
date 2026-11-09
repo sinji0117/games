@@ -12,6 +12,7 @@ pub mod ratelimit;
 pub mod routes;
 pub mod state;
 pub mod storage;
+pub mod web;
 
 use axum::Router;
 

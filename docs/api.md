@@ -25,7 +25,7 @@
 | 사다리 생성 | IP 당 20회/분 |
 | 가로선 추가 | IP 당 60회/분 |
 
-`TRUST_PROXY=true` 일 때만 `X-Forwarded-For` 첫 주소를 IP 로 사용합니다.
+`TRUST_PROXY` 가 켜져 있을 때만 `X-Real-IP`, 없으면 `X-Forwarded-For` 첫 주소를 IP 로 사용합니다. 지정하지 않으면 127.0.0.1 에만 열렸을 때(Rpanel) 자동으로 켜집니다.
 
 ## 공통
 ### `GET /api/health`
@@ -37,7 +37,16 @@
   "storage": { "sessions": "redis → mariadb", "results": "mariadb", "redis": "ok", "mariadb": "ok" }
 }
 ```
-`redis`/`mariadb` 는 `ok` · `down` · `off`(설정 안 함). 하나라도 `down` 이면 `status: "degraded"`.
+`redis`/`mariadb` 는 `ok` · `down` · `off`(설정 안 함). 하나라도 `down` 이면 `status: "degraded"`. 응답 코드는 언제나 200 (저장소가 끊겨도 폴백으로 동작하므로 배포 헬스체크를 막지 않음).
+
+### `GET /api/health/deps`
+```json
+{ "db": true, "redis": true }
+```
+외부 저장소에 지금 연결되는지만. 설정하지 않은 저장소는 `false`.
+
+### 그 밖의 경로
+`/api/…` 에 없는 경로는 `404 {"error":"not_found"}`. `/api` 밖은 바이너리에 내장된 화면(`index.html`, `assets/*`)을 줍니다.
 
 ## 사다리
 
