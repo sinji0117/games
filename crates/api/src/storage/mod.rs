@@ -9,6 +9,7 @@
 //!
 //! 폴백·재시도 규칙 자체는 `game_core::store` 에 있고 그쪽 테스트로 검증합니다.
 
+pub mod accounts;
 pub mod mariadb;
 pub mod redis;
 pub mod results;

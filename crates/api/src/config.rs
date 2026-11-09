@@ -9,6 +9,8 @@ pub struct Config {
     pub session_ttl_secs: u64,
     /// 리버스 프록시 뒤에서 X-Forwarded-For 를 신뢰할지
     pub trust_proxy: bool,
+    /// 프론트엔드 빌드(`apps/site/dist`) 경로. 있으면 API 서버가 정적 파일도 서빙 (컨테이너 하나로 배포)
+    pub static_dir: Option<String>,
 }
 
 pub const DEFAULT_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
@@ -31,6 +33,7 @@ impl Config {
                 .filter(|&v| v > 0)
                 .unwrap_or(DEFAULT_SESSION_TTL_SECS),
             trust_proxy: get("TRUST_PROXY").is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes")),
+            static_dir: get("STATIC_DIR"),
         }
     }
 
@@ -43,6 +46,7 @@ impl Config {
             redis_url: None,
             session_ttl_secs: DEFAULT_SESSION_TTL_SECS,
             trust_proxy: false,
+            static_dir: None,
         }
     }
 }

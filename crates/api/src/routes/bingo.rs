@@ -9,10 +9,12 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use game_core::game_common::{GameKind, GameModule, GamePhase};
 use game_core::games::bingo::{BingoConfig, BingoGame, BingoSnapshot, Call, CallMode, PoolSpec};
+use game_core::points::bingo_awards;
 use game_core::store::{Codec, StoreError, StoredSession};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::auth::{award, MaybeUser};
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, ApiResult};
 use crate::fairness::{constant_time_eq, hash_token, random_token, Secret};
@@ -44,6 +46,9 @@ pub struct BingoSession {
     pub nonce: String,
     /// 참가자 순서대로 sha256(player_token)
     pub token_hashes: Vec<String>,
+    /// 참가자 순서대로 연결된 계정 (로그인하고 참가했을 때). 끝나면 포인트 지급에 사용
+    #[serde(default)]
+    pub user_ids: Vec<Option<u64>>,
     pub created_at: u64,
 }
 
@@ -208,6 +213,7 @@ pub struct CallRequest {
 async fn create(
     State(st): State<AppState>,
     ip: ClientIp,
+    MaybeUser(user): MaybeUser,
     Json(req): Json<CreateRequest>,
 ) -> ApiResult<(StatusCode, Json<JoinedView>)> {
     let now = now_secs();
@@ -223,6 +229,7 @@ async fn create(
         seed: secret.seed_hex(),
         nonce: secret.nonce_hex(),
         token_hashes: vec![hash_token(&player_token)],
+        user_ids: vec![user.map(|u| u.id)],
         created_at: now,
     };
     st.sessions
@@ -259,6 +266,7 @@ async fn fetch(
 async fn join(
     State(st): State<AppState>,
     ip: ClientIp,
+    MaybeUser(user): MaybeUser,
     Path(id): Path<Uuid>,
     Json(req): Json<JoinRequest>,
 ) -> ApiResult<(StatusCode, Json<JoinedView>)> {
@@ -266,6 +274,7 @@ async fn join(
     let now = now_secs();
     st.limiter.check(&BINGO_JOIN, &ip.0, now).await?;
     // 토큰은 재시도해도 같은 값이 되도록 클로저 밖에서 한 번만 만듦
+    let user_id = user.map(|u| u.id);
     let player_token = random_token();
     let token_hash = hash_token(&player_token);
     let (game, index) = st
@@ -280,6 +289,9 @@ async fn join(
                 let index = g.join(&req.name)?;
                 s.snapshot = g.snapshot();
                 s.token_hashes.push(token_hash.clone());
+                // 이전 버전 세션(계정 정보 없음)도 길이를 맞춤
+                s.user_ids.resize(s.token_hashes.len() - 1, None);
+                s.user_ids.push(user_id);
                 Ok((view(&id, &g, &s.secret()?, s.created_at, Some(index)), index))
             },
         )
@@ -362,7 +374,8 @@ async fn call(
 ) -> ApiResult<Json<BingoView>> {
     st.limiter.check(&BINGO_ACTION, &ip.0, now_secs()).await?;
     let value = req.value;
-    act(&st, &id.to_string(), &headers, |g, me| {
+    let id = id.to_string();
+    let out = act(&st, &id, &headers, |g, me| {
         match g.mode() {
             CallMode::Draw => {
                 if me != HOST {
@@ -377,5 +390,18 @@ async fn call(
         }
         Ok(())
     })
-    .await
+    .await?;
+    if out.phase == GamePhase::Finished {
+        award_finished(&st, &id, &out.winners).await;
+    }
+    Ok(out)
+}
+
+/// 끝난 게임의 참가·우승 포인트 지급 (같은 게임은 원장 고유키로 한 번만)
+async fn award_finished(st: &AppState, id: &str, winners: &[usize]) {
+    let session: Result<BingoSession, _> = st.sessions.load(KIND, id, now_secs(), &JsonCodec).await;
+    let Ok(session) = session else { return };
+    for (user_id, reason) in bingo_awards(&session.user_ids, winners) {
+        award(st, user_id, reason, id).await;
+    }
 }

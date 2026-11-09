@@ -10,10 +10,12 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use game_core::game_common::GameKind;
 use game_core::games::pinball::{self, RaceResult, RouletteConfig};
+use game_core::points::Reason;
 use game_core::store::StoreError;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::auth::{award, MaybeUser};
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, ApiResult};
 use crate::fairness::Secret;
@@ -54,6 +56,7 @@ fn view(r: RouletteRecord) -> RouletteView {
 async fn create(
     State(st): State<AppState>,
     ip: ClientIp,
+    MaybeUser(user): MaybeUser,
     Json(config): Json<RouletteConfig>,
 ) -> ApiResult<(StatusCode, Json<RouletteView>)> {
     let now = now_secs();
@@ -76,6 +79,9 @@ async fn create(
         created_at: now,
     };
     st.roulettes.save(&record).await?;
+    if let Some(u) = &user {
+        award(&st, u.id, Reason::Roulette, &record.id).await;
+    }
     Ok((StatusCode::CREATED, Json(view(record))))
 }
 

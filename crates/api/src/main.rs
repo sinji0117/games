@@ -5,6 +5,7 @@ use axum::http::{HeaderValue, Method};
 use game_api::storage::MariaDbBackend;
 use game_api::{app, config::Config, state::now_secs, AppState};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
@@ -46,7 +47,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers(Any);
 
-    let router = app(state).layer(cors).layer(TraceLayer::new_for_http());
+    let mut router = app(state);
+    if let Some(dir) = &config.static_dir {
+        // /api 밖의 경로는 프론트엔드 빌드에서. 화면 경로는 해시(#/...)라 index.html 하나면 충분
+        let index = std::path::Path::new(dir).join("index.html");
+        router = router.fallback_service(ServeDir::new(dir).not_found_service(ServeFile::new(index)));
+        tracing::info!(dir, "정적 파일 서빙");
+    }
+    let router = router.layer(cors).layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(&config.bind).await?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), bind = %config.bind, "game-api 시작");
