@@ -25,6 +25,7 @@ getrandom = { workspace = true }
 uuid = { workspace = true }
 sqlx = { workspace = true }
 redis = { workspace = true }
+futures-util = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

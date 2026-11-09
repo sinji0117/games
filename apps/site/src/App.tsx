@@ -3,6 +3,8 @@ import { useRoute } from "./lib/router.ts";
 import { Lobby } from "./pages/Lobby.tsx";
 import { LadderRoom } from "./pages/ladder/LadderRoom.tsx";
 import { LadderSetup } from "./pages/ladder/LadderSetup.tsx";
+import { BingoRoom } from "./pages/bingo/BingoRoom.tsx";
+import { BingoSetup } from "./pages/bingo/BingoSetup.tsx";
 
 export function App() {
   const route = useRoute();
@@ -18,6 +20,8 @@ export function App() {
         {route.name === "lobby" && <Lobby />}
         {route.name === "ladder-new" && <LadderSetup />}
         {route.name === "ladder-room" && <LadderRoom key={route.id} id={route.id} />}
+        {route.name === "bingo-new" && <BingoSetup />}
+        {route.name === "bingo-room" && <BingoRoom key={route.id} id={route.id} />}
         {route.name === "not-found" && (
           <section className="empty">
             <h1>없는 페이지예요</h1>

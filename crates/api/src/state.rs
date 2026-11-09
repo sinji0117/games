@@ -5,6 +5,7 @@ use game_core::store::{FailoverStore, MemoryBackend};
 use sqlx::mysql::MySqlPool;
 
 use crate::config::Config;
+use crate::events::EventBus;
 use crate::ratelimit::Limiter;
 use crate::storage::results::ResultsRepo;
 use crate::storage::{mariadb, AnyBackend, MariaDbBackend, RedisBackend, SessionStore, MEMORY_MAX_SESSIONS};
@@ -15,6 +16,7 @@ pub struct AppState {
     pub sessions: Arc<SessionStore>,
     pub results: Arc<ResultsRepo>,
     pub limiter: Arc<Limiter>,
+    pub events: Arc<EventBus>,
     pub redis: Option<RedisBackend>,
     pub db: Option<MySqlPool>,
     pub session_ttl_secs: u64,
@@ -88,6 +90,7 @@ impl AppState {
             sessions: Arc::new(sessions),
             results: Arc::new(results),
             limiter: Arc::new(Limiter::new(redis.clone())),
+            events: EventBus::new(redis.clone()),
             redis,
             db,
             session_ttl_secs: config.session_ttl_secs,

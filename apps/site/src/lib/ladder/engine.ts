@@ -1,7 +1,7 @@
 // crates/core/src/games/ladder.rs 의 생성·추적 로직 포팅 (검증 전용, 입력 검증은 서버가 담당)
 
 import type { Point, Rung } from "../../api/types.ts";
-import { SeededRng } from "./rng.ts";
+import { SeededRng } from "../rng.ts";
 
 export type Cell = { row: number; col: number };
 

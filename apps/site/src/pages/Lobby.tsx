@@ -15,7 +15,12 @@ const GAMES = [
     about: "이름과 결과를 적고 사다리를 내려가요. 다 함께 가로선을 더 그을 수 있어요.",
     href: "#/ladder/new",
   },
-  { key: "bingo", name: "빙고", about: "5×5 판을 채우고 번호를 불러 먼저 줄을 완성해요.", href: null },
+  {
+    key: "bingo",
+    name: "빙고",
+    about: "숫자나 단어로 판을 채우고, 번호를 뽑거나 돌아가며 불러 먼저 줄을 완성해요.",
+    href: "#/bingo/new",
+  },
   { key: "pinball", name: "핀볼", about: "공을 튕겨 점수를 모으고 랭킹에 도전해요.", href: null },
 ] as const;
 

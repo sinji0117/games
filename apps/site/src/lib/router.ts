@@ -5,14 +5,17 @@ export type Route =
   | { name: "lobby" }
   | { name: "ladder-new" }
   | { name: "ladder-room"; id: string }
+  | { name: "bingo-new" }
+  | { name: "bingo-room"; id: string }
   | { name: "not-found" };
 
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, "") || "/";
   if (path === "/") return { name: "lobby" };
   if (path === "/ladder/new") return { name: "ladder-new" };
-  const m = path.match(/^\/ladder\/([0-9a-f-]{36})$/i);
-  if (m) return { name: "ladder-room", id: m[1] };
+  if (path === "/bingo/new") return { name: "bingo-new" };
+  const m = path.match(/^\/(ladder|bingo)\/([0-9a-f-]{36})$/i);
+  if (m) return m[1] === "ladder" ? { name: "ladder-room", id: m[2] } : { name: "bingo-room", id: m[2] };
   return { name: "not-found" };
 }
 

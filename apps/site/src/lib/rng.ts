@@ -1,5 +1,5 @@
 // crates/core/src/rng.rs 의 TS 포팅 (SplitMix64 + xoshiro256**).
-// 서버가 공개한 시드로 같은 사다리를 재현해 결과를 검증하는 데 씁니다. 두 구현은 tests/ 에서 교차 검증합니다.
+// 서버가 공개한 시드로 같은 사다리·추첨 순서를 재현해 결과를 검증하는 데 씁니다. 두 구현은 tests/ 에서 교차 검증합니다.
 
 const MASK = (1n << 64n) - 1n;
 const U64_MAX = MASK;
@@ -53,7 +53,17 @@ export class SeededRng {
   chance(p: number): boolean {
     return this.nextF64() < p;
   }
+
+  /** Fisher–Yates (Rust `SeededRng::shuffle` 과 같은 순서) */
+  shuffle<T>(items: T[]): void {
+    for (let i = items.length - 1; i >= 1; i--) {
+      const j = this.below(i + 1);
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+  }
 }
+
+export const U64_MASK = MASK;
 
 export function seedFromHex(hex: string): bigint {
   if (!/^[0-9a-f]{1,16}$/i.test(hex)) throw new Error(`잘못된 시드 형식: ${hex}`);

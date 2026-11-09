@@ -4,10 +4,11 @@ import type { LadderView } from "../../api/types.ts";
 import { makeLayout, polylineLength, toPx } from "../../lib/ladder/geometry.ts";
 import { verifyLadder, type VerifyReport } from "../../lib/ladder/verify.ts";
 import { hostTokenKey, load } from "../../lib/storage.ts";
+import { useRoomEvents } from "../../lib/useRoomEvents.ts";
+import { LiveBadge } from "../../components/LiveBadge.tsx";
 import { LadderBoard, laneColor } from "./LadderBoard.tsx";
 import { usePathAnimation } from "./usePathAnimation.ts";
 
-const POLL_MS = 2500;
 const PLAYER_RUNGS_PER_COLUMN = 3;
 
 export function LadderRoom({ id }: { id: string }) {
@@ -33,15 +34,8 @@ export function LadderRoom({ id }: { id: string }) {
     void refresh();
   }, [refresh]);
 
-  // 공개 전에는 다른 사람이 그은 가로선과 공개 여부를 주기적으로 확인
-  const phase = view?.phase;
-  useEffect(() => {
-    if (phase !== "lobby") return;
-    const t = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, POLL_MS);
-    return () => window.clearInterval(t);
-  }, [phase, refresh]);
+  // 공개 전에는 다른 사람이 그은 가로선과 공개 여부를 실시간으로 받음 (안 되면 폴링)
+  const live = useRoomEvents("ladder", id, refresh, view?.phase === "lobby");
 
   useEffect(() => {
     if (view?.reveal) verifyLadder(view).then(setReport, () => setReport(null));
@@ -116,7 +110,9 @@ export function LadderRoom({ id }: { id: string }) {
     <section className="room">
       <header className="room__head">
         <div>
-          <h1>사다리타기</h1>
+          <h1>
+            사다리타기 {!finished && <LiveBadge mode={live} />}
+          </h1>
           <p className="muted">
             {finished
               ? "결과가 공개됐어요. 이름을 누르면 그 사람의 길을 따라가요."
