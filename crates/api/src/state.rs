@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::events::EventBus;
 use crate::ratelimit::Limiter;
 use crate::storage::results::ResultsRepo;
-use crate::storage::scores::ScoresRepo;
+use crate::storage::roulettes::RouletteRepo;
 use crate::storage::{mariadb, AnyBackend, MariaDbBackend, RedisBackend, SessionStore, MEMORY_MAX_SESSIONS};
 
 /// 핸들러가 공유하는 상태
@@ -16,14 +16,13 @@ use crate::storage::{mariadb, AnyBackend, MariaDbBackend, RedisBackend, SessionS
 pub struct AppState {
     pub sessions: Arc<SessionStore>,
     pub results: Arc<ResultsRepo>,
-    pub scores: Arc<ScoresRepo>,
+    pub roulettes: Arc<RouletteRepo>,
     pub limiter: Arc<Limiter>,
     pub events: Arc<EventBus>,
     pub redis: Option<RedisBackend>,
     pub db: Option<MySqlPool>,
     pub session_ttl_secs: u64,
     pub trust_proxy: bool,
-    pub pinball_realtime_check: bool,
 }
 
 pub fn now_secs() -> u64 {
@@ -89,21 +88,20 @@ impl AppState {
             Some(pool) => ResultsRepo::MariaDb(pool.clone()),
             None => ResultsRepo::memory(),
         };
-        let scores = match &db {
-            Some(pool) => ScoresRepo::MariaDb(pool.clone()),
-            None => ScoresRepo::memory(),
+        let roulettes = match &db {
+            Some(pool) => RouletteRepo::MariaDb(pool.clone()),
+            None => RouletteRepo::memory(),
         };
         Self {
             sessions: Arc::new(sessions),
             results: Arc::new(results),
-            scores: Arc::new(scores),
+            roulettes: Arc::new(roulettes),
             limiter: Arc::new(Limiter::new(redis.clone())),
             events: EventBus::new(redis.clone()),
             redis,
             db,
             session_ttl_secs: config.session_ttl_secs,
             trust_proxy: config.trust_proxy,
-            pinball_realtime_check: config.pinball_realtime_check,
         }
     }
 

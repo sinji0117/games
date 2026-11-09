@@ -6,11 +6,9 @@ import type {
   CreatedLadder,
   JoinedBingo,
   LadderView,
-  PinballFinish,
-  PinballScores,
-  PinballStart,
+  RouletteView,
 } from "./types.ts";
-import type { Input } from "../lib/pinball/engine.ts";
+import type { RouletteConfig } from "../lib/pinball/engine.ts";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -67,8 +65,6 @@ export const bingoApi = {
 };
 
 export const pinballApi = {
-  start: () => request<PinballStart>("POST", "/api/pinball/sessions", {}),
-  finish: (id: string, name: string, inputs: Input[], claimed: number) =>
-    request<PinballFinish>("POST", `/api/pinball/sessions/${id}/finish`, { name, inputs, claimed_score: claimed }),
-  scores: () => request<PinballScores>("GET", "/api/pinball/scores"),
+  create: (config: RouletteConfig) => request<RouletteView>("POST", "/api/pinball/games", config),
+  get: (id: string) => request<RouletteView>("GET", `/api/pinball/games/${id}`),
 };
