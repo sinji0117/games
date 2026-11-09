@@ -2,7 +2,7 @@
 
 import type { LadderView } from "../../api/types.ts";
 import { generate, Grid, trace } from "./engine.ts";
-import { seedFromHex } from "./rng.ts";
+import { seedFromHex } from "../rng.ts";
 
 export interface VerifyReport {
   commitment: boolean;

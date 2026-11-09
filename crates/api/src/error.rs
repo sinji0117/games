@@ -10,8 +10,11 @@ use serde::Serialize;
 pub enum ApiError {
     Game(GameError),
     Store(StoreError),
-    Unauthorized,
-    RateLimited { retry_after: u64 },
+    /// 권한 없음 (사유)
+    Forbidden(String),
+    RateLimited {
+        retry_after: u64,
+    },
     Internal(String),
 }
 
@@ -89,12 +92,7 @@ impl IntoResponse for ApiError {
                     )
                 }
             },
-            ApiError::Unauthorized => (
-                StatusCode::FORBIDDEN,
-                "forbidden",
-                "방장만 결과를 공개할 수 있습니다".into(),
-                None,
-            ),
+            ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, "forbidden", msg.clone(), None),
             ApiError::RateLimited { retry_after: secs } => {
                 retry_after = Some(*secs);
                 (

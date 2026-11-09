@@ -1,6 +1,6 @@
 # Games — 멀티 미니게임 플랫폼
 
-![version](https://img.shields.io/badge/version-0.3.0-blue)
+![version](https://img.shields.io/badge/version-0.4.0-blue)
 
 사다리 · 빙고 · 핀볼 같은 미니게임을 한곳에서 즐기고, 방 생성 · 실시간 승패 기록 · 포인트/랭킹을 제공하는 아케이드 플랫폼입니다.
 `정비로` 플랫폼 아키텍처(Rust Axum + React 19/Vite + MariaDB + Redis 7, 모노레포)를 계승합니다.
@@ -12,8 +12,8 @@
 | 1 | 모노레포 골격, 공통 코어, **사다리 엔진**, API 골격(인메모리), 문서 | ✅ 0.1.0 |
 | 2 | 사다리 프론트엔드 (`apps/site` 로비 + 사다리 화면, 브라우저 결과 검증) | ✅ 0.2.0 |
 | 3 | MariaDB 영구 저장 · Redis 세션 · 폴백 · 레이트 리밋 | ✅ 0.3.0 |
-| 4 | 빙고 엔진 + 실시간 방 동기화 (Redis Pub/Sub · WebSocket) | ⏳ 다음 |
-| 5 | 핀볼 (Matter.js) + 점수 검증 | 예정 |
+| 4 | 빙고 엔진 + 실시간 방 동기화 (Redis Pub/Sub · WebSocket) | ✅ 0.4.0 |
+| 5 | 핀볼 (Matter.js) + 점수 검증 | ⏳ 다음 |
 | 6 | 계정 · 포인트 · 랭킹(Redis Sorted Set) · 배포 | 예정 |
 
 > 랭킹은 "누구의 기록인가"가 정해져야 의미가 있어 계정과 함께 6단계로 옮겼습니다.

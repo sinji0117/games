@@ -4,6 +4,7 @@
 pub mod client_ip;
 pub mod config;
 pub mod error;
+pub mod events;
 pub mod fairness;
 pub mod ratelimit;
 pub mod routes;

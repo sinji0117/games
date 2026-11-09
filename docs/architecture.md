@@ -5,12 +5,14 @@
 ```text
 [브라우저: apps/site (React 19)]
   lib/ladder   Rust 엔진 TS 포팅 → 결과 공개 후 브라우저에서 재계산·검증
-        │ REST (JSON)  ·  WebSocket (4단계~)
+        │ REST (JSON) — 상태 읽기/쓰기
+        │ WebSocket /api/ws/{game}/{id} — "바뀌었음" 알림만 (끊기면 폴링)
         ▼
 [crates/api  — Axum]
   routes/      HTTP 입출력, 인증 토큰 확인, 에러 → 상태 코드 매핑
   storage/     Redis · MariaDB 어댑터, 결과 보관소
   ratelimit    레이트 리밋 (Redis INCR → 실패 시 메모리)
+  events       방 변경 알림 버스 (로컬 broadcast + Redis Pub/Sub room:*)
   fairness     커밋-공개 시드, 토큰 생성
         │ 순수 함수 호출
         ▼
@@ -68,9 +70,16 @@
 2. 진행 중에는 결과를 결정하는 비밀 정보(사다리의 기본 가로선 등)를 숨깁니다.
 3. 결과 확정 시 seed·nonce 를 공개 → 클라이언트가 해시와 재현 결과를 검증합니다.
 
+## 실시간 동기화
+1. 상태를 바꾼 핸들러가 저장소 `update` 성공 후 `events.changed(game, id)` 호출
+2. 같은 서버의 WebSocket 에는 바로 전달, Redis 가 있으면 `PUBLISH room:{game}:{id}` 로 다른 서버에도 전달
+3. 각 서버는 `PSUBSCRIBE room:*` 한 연결로 받아 자기 접속자에게 나눠줌 (자기가 보낸 것은 `origin` 으로 무시)
+4. 브라우저(`useRoomEvents`)는 알림을 받으면 REST 로 다시 불러옴. 연결 실패·끊김 시 2.5초 폴링으로 바꾸고 5→60초 간격으로 재연결
+알림에 상태를 싣지 않으므로 권한(남의 빙고판 숨김 등)은 REST 한 곳에서만 지키면 됩니다.
+
 ## 새 게임 추가 절차
 
 1. `GameKind` 에 항목 추가
 2. `crates/core/src/games/<name>.rs` 에 엔진 + 테스트, `GameModule` 구현
-3. `crates/api/src/routes/<name>.rs` 라우터 추가, `routes/mod.rs` 에 `nest`
+3. `crates/api/src/routes/<name>.rs` 라우터 추가, `routes/mod.rs` 에 `nest`. 상태를 바꾼 뒤 `events.changed` 호출
 4. `docs/games-<name>.md`, `docs/api.md` 갱신

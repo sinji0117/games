@@ -11,7 +11,7 @@
 | `invalid_input` | 422 |
 | `invalid_state` | 409 |
 | `not_found` | 404 |
-| `forbidden` | 403 |
+| `forbidden` | 403 (방장·참가자 권한 없음, `message` 에 사유) |
 | `busy` | 409 (같은 방 동시 수정 충돌이 재시도 한도 초과) |
 | `rate_limited` | 429 (`Retry-After` 헤더) |
 | `unavailable` | 503 (저장소 연결 불가, `Retry-After: 5`) |
@@ -86,6 +86,53 @@
 }
 ```
 
+## 빙고
+
+참가자 인증: `x-player-token: <player_token>` (참가할 때 한 번만 받음). 0번 참가자가 방장.
+
+| 메서드 | 경로 | 권한 | 설명 |
+| --- | --- | --- | --- |
+| POST | `/api/bingo/games` | – | 방 만들기 (만든 사람이 0번으로 참가) → 201 `JoinedView` |
+| GET | `/api/bingo/games/{id}` | 선택 | 상태. 토큰이 있으면 `me` 와 내 판 포함 |
+| POST | `/api/bingo/games/{id}/players` | – | 참가 `{ "name": "도윤" }` → 201 `JoinedView` |
+| PUT | `/api/bingo/games/{id}/board` | 참가자 | 시작 전 판 배치 `{ "board": [풀 인덱스 N²개] }` |
+| POST | `/api/bingo/games/{id}/start` | 방장 | 시작 (2명 이상), 본문 `{}` |
+| POST | `/api/bingo/games/{id}/calls` | 방장(뽑기) / 차례인 사람(부르기) | 뽑기 `{}`, 부르기 `{ "value": 풀 인덱스 }` |
+
+### 방 만들기 요청
+```json
+{ "host_name": "민지", "size": 5, "mode": "draw", "pool": { "type": "numbers", "max": 50 }, "target_lines": 3 }
+```
+- `mode`: `draw`(번호 뽑기) | `turns`(돌아가며 부르기)
+- `pool`: 생략 시 숫자 1~N². 단어는 `{ "type": "words", "words": ["사과", …] }`
+- `target_lines`: 생략 시 N
+
+### `BingoView`
+```json
+{
+  "id": "…", "kind": "bingo", "phase": "playing",
+  "size": 5, "mode": "turns", "target_lines": 5, "pool_type": "numbers",
+  "labels": ["1", "2", "…", "25"],
+  "players": [
+    { "index": 0, "name": "민지", "lines": 2, "board": [3, 17, …], "completed": [0, 12] },
+    { "index": 1, "name": "도윤", "lines": 1 }
+  ],
+  "calls": [{ "value": 16, "by": 0 }, { "value": 4, "by": 1 }],
+  "turn": 0, "winners": [], "host": 0, "me": 0,
+  "commitment": "…", "created_at": 1762675200
+}
+```
+- `board`/`completed` 는 본인이거나 게임이 끝났을 때만 포함
+- `turn` 은 돌아가며 부르기 진행 중일 때만 값이 있음
+- 끝나면 `phase: "finished"`, `winners`, `reveal: { seed, nonce }`
+- `JoinedView` = `BingoView` + `player_token`, `player_index`
+
+### 레이트 리밋
+방 만들기 20/분, 참가 30/분, 판 배치·시작·부르기 120/분 (IP 기준)
+
+## WebSocket — `GET /api/ws/{game}/{id}`
+`game` 은 `ladder` | `bingo`. 방이 바뀔 때마다 `{ "type": "changed", … }` 를 보냅니다. 메시지 형식과 동작은 [redis-pubsub.md](redis-pubsub.md).
+
 ## 예정
-- 3단계: `/api/auth/*`, `/api/rankings/{game}`
-- 4단계: `GET /api/ws/rooms/{id}` (WebSocket) — 메시지 형식은 `redis-pubsub.md`
+- 5단계: 핀볼 세션·점수 제출
+- 6단계: `/api/auth/*`, `/api/rankings/{game}`

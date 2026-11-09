@@ -256,7 +256,10 @@ async fn add_rung(
         )
         .await;
     match out {
-        Ok(v) => Ok(Json(v)),
+        Ok(v) => {
+            st.events.changed(KIND, &id).await;
+            Ok(Json(v))
+        }
         Err(ApiError::Store(StoreError::NotFound)) => {
             // 세션은 만료됐지만 결과가 보관된 사다리라면 "없음" 보다 "이미 끝남" 이 정확함
             if let Ok(Some(_)) = st.results.find(&id).await {
@@ -301,7 +304,7 @@ async fn reveal(
             &JsonCodec,
             |s: &mut LadderSession| -> ApiResult<LadderSession> {
                 if token.is_empty() || !constant_time_eq(&token_hash, &s.host_token_hash) {
-                    return Err(ApiError::Unauthorized);
+                    return Err(ApiError::Forbidden("방장만 결과를 공개할 수 있습니다".into()));
                 }
                 let mut game = s.game()?;
                 game.finish()?;
@@ -313,6 +316,7 @@ async fn reveal(
             },
         )
         .await?;
+    st.events.changed(KIND, &id).await;
     if !session.archived {
         archive(&st, &id, &session).await;
     }

@@ -2,6 +2,24 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.4.0] - 2026-11-09
+
+### Added
+- `game_core::games::bingo`: 빙고 엔진 — 3×3~7×7, 숫자/단어 풀, 번호 뽑기·돌아가며 부르기, 비트마스크 줄 판정, 동시 우승, 스냅샷 복원 시 규칙 재검증
+- API: 빙고 방 만들기·참가·판 배치·시작·뽑기/부르기, 참가자 토큰(해시 저장), 남의 판 숨김
+- 실시간 동기화: `GET /api/ws/{game}/{id}` WebSocket, 방 변경 알림 버스(로컬 + Redis Pub/Sub `room:*`)
+- 프론트엔드: 빙고 만들기·방 화면(판 섞기·바꾸기, 도장, 줄 표시, 참가자 줄 수, 모든 판 공개)
+- 브라우저 빙고 검증(해시 · 추첨 순서 · 승자 재계산), Rust 기준값 교차 테스트(`bingo_fixtures`)
+- `useRoomEvents`: WebSocket 실시간, 끊기면 폴링으로 자동 전환 · 재연결 (사다리 방에도 적용, "실시간/자동 새로고침" 표시)
+
+### Changed
+- 공용 `SeededRng` TS 포팅을 `src/lib/rng.ts` 로 이동, `shuffle` 추가
+- `ApiError::Forbidden(사유)` 로 권한 오류 메시지를 상황별로
+- Vite 개발 프록시에 WebSocket 전달(`ws: true`)
+
+### Fixed
+- `apps/site` 타입 검사에서 테스트 폴더 제외 (`@types/node` 없이 `pnpm typecheck` 가 실패하던 문제)
+
 ## [0.3.0] - 2026-11-09
 
 ### Added

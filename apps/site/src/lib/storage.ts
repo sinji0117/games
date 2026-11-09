@@ -17,3 +17,25 @@ export function save(key: string, value: string): void {
 }
 
 export const hostTokenKey = (id: string) => `ladder.host.${id}`;
+
+export const bingoPlayerKey = (id: string) => `bingo.player.${id}`;
+
+export interface BingoIdentity {
+  token: string;
+  index: number;
+}
+
+export function loadBingoIdentity(id: string): BingoIdentity | null {
+  const raw = load(bingoPlayerKey(id));
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as BingoIdentity;
+    return typeof v.token === "string" && typeof v.index === "number" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveBingoIdentity(id: string, v: BingoIdentity): void {
+  save(bingoPlayerKey(id), JSON.stringify(v));
+}

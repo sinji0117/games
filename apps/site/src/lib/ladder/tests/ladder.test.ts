@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { SeededRng, seedFromHex } from "../rng.ts";
+import { SeededRng, seedFromHex } from "../../rng.ts";
 import { generate, mapping, Grid, trace } from "../engine.ts";
 import { verifyLadder, sha256Hex } from "../verify.ts";
 import { cellAt, makeLayout, pointAt, polylineLength, toPx } from "../geometry.ts";

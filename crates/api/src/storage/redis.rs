@@ -34,6 +34,7 @@ return n
 
 #[derive(Clone)]
 pub struct RedisBackend {
+    client: ::redis::Client,
     conn: ConnectionManager,
     insert: Script,
     cas: Script,
@@ -51,11 +52,25 @@ impl RedisBackend {
             ::redis::Client::open(url).map_err(|e| StoreError::Unavailable(format!("redis url: {e}")))?;
         let conn = with_timeout("redis 연결", client.get_connection_manager()).await?;
         Ok(Self {
+            client,
             conn,
             insert: Script::new(INSERT_LUA),
             cas: Script::new(CAS_LUA),
             hit: Script::new(HIT_LUA),
         })
+    }
+
+    /// Pub/Sub 구독용 클라이언트 (구독은 전용 연결이 필요)
+    pub fn client(&self) -> &::redis::Client {
+        &self.client
+    }
+
+    pub async fn publish(&self, channel: &str, payload: &str) -> Result<(), StoreError> {
+        let mut conn = self.conn.clone();
+        let mut cmd = ::redis::cmd("PUBLISH");
+        cmd.arg(channel).arg(payload);
+        let _: i64 = with_timeout("redis publish", cmd.query_async(&mut conn)).await?;
+        Ok(())
     }
 
     pub async fn ping(&self) -> Result<(), StoreError> {

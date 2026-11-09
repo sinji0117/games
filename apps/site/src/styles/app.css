@@ -639,3 +639,364 @@ button.board__name:hover {
     transition: none;
   }
 }
+
+/* 공용 입력 */
+.input {
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  border: 2px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: 16px var(--font-sans);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--c-primary);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+.input--num {
+  width: 6em;
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  padding: var(--space-3);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.field {
+  display: block;
+  margin: var(--space-4) 0;
+}
+
+.field > .field__label {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.field--inline > .field__label {
+  display: inline;
+  margin: 0;
+}
+
+.inline-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.setup__explain {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  max-width: 36em;
+}
+
+.join {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 2px dashed var(--c-ink);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+}
+
+.join .field {
+  margin: 0;
+}
+
+/* 실시간 표시 */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+  font: 500 13px var(--font-sans);
+  color: var(--c-text-muted);
+}
+
+.live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-border);
+}
+
+.live--live::before {
+  background: var(--c-success);
+}
+
+.live--polling::before {
+  background: var(--c-lane-5);
+}
+
+.room__status {
+  margin: var(--space-2) 0 0;
+  font-weight: 700;
+}
+
+/* 빙고 판 */
+.bingo {
+  position: relative;
+  display: grid;
+  gap: 0;
+  width: min(100%, calc(var(--n) * 104px));
+  border: 3px solid var(--c-ink);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  overflow: hidden;
+}
+
+.bingo--compact {
+  width: min(100%, calc(var(--n) * 52px));
+  border-width: 2px;
+}
+
+.bingo__row {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+}
+
+.bingo__cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-right: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-text);
+  font-family: var(--font-display);
+  font-size: clamp(13px, calc(34px - var(--n) * 2px - var(--len) * 1.6px), 30px);
+  line-height: 1.1;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-align: center;
+  cursor: default;
+}
+
+.bingo--compact .bingo__cell {
+  font-size: 13px;
+}
+
+.bingo__row:last-child .bingo__cell {
+  border-bottom: 0;
+}
+
+.bingo__cell:last-child {
+  border-right: 0;
+}
+
+.bingo__cell span {
+  position: relative;
+  z-index: 1;
+}
+
+/* 도장 */
+.bingo__cell.is-called::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: var(--c-lane-2);
+  opacity: var(--trail-opacity);
+  mix-blend-mode: var(--trail-blend);
+}
+
+.bingo__cell.is-latest::before {
+  animation: stamp 260ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes stamp {
+  from {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.bingo__cell.is-pressable {
+  cursor: pointer;
+}
+
+.bingo__cell.is-pressable:hover {
+  background: color-mix(in srgb, var(--c-lane-1) 35%, transparent);
+}
+
+.bingo__cell.is-selected {
+  background: color-mix(in srgb, var(--c-primary) 22%, transparent);
+  box-shadow: inset 0 0 0 3px var(--c-primary);
+}
+
+.bingo__cell:disabled {
+  opacity: 1;
+}
+
+.bingo__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0; /* 도장 위, 글자(z-index 1) 아래 */
+}
+
+.bingo__lines line {
+  stroke: var(--c-primary);
+  stroke-width: 0.12;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.bingo--compact .bingo__lines line {
+  stroke-width: 0.16;
+}
+
+/* 빙고 방 배치 */
+.bingo-room__body {
+  display: grid;
+  grid-template-columns: minmax(0, 620px) minmax(240px, 340px);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.bingo-room__mine {
+  margin: var(--space-3) 0 0;
+  font-size: 18px;
+}
+
+.bingo-room__mine strong {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.latest {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: 64px;
+  line-height: 1;
+  animation: latest-in 240ms ease-out both;
+}
+
+@keyframes latest-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}
+
+.calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.calls li {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  font-size: 14px;
+}
+
+.players {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--c-ink);
+}
+
+.players li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.players li.is-turn {
+  background: color-mix(in srgb, var(--c-lane-1) 40%, transparent);
+}
+
+.players li.is-winner .players__name {
+  background: var(--c-lane-2);
+  color: #1e2230;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+.players__name small {
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+.players__lines {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.players__lines i {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--c-ink);
+  border-radius: 2px;
+}
+
+.players__lines i.on {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
+.boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.boards figure {
+  margin: 0;
+}
+
+.boards figcaption {
+  margin-top: var(--space-1);
+  font-size: 14px;
+}
+
+.boards figure.is-winner figcaption {
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .bingo-room__body {
+    grid-template-columns: 1fr;
+  }
+
+  .latest {
+    font-size: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bingo__cell.is-latest::before,
+  .latest {
+    animation: none;
+  }
+}

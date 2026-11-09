@@ -1,4 +1,12 @@
-import type { ApiErrorBody, CreateLadderRequest, CreatedLadder, LadderView } from "./types.ts";
+import type {
+  ApiErrorBody,
+  BingoView,
+  CreateBingoRequest,
+  CreateLadderRequest,
+  CreatedLadder,
+  JoinedBingo,
+  LadderView,
+} from "./types.ts";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -39,4 +47,17 @@ export const ladderApi = {
     request<LadderView>("POST", `/api/ladder/games/${id}/rungs`, { row, col }),
   reveal: (id: string, hostToken: string) =>
     request<LadderView>("POST", `/api/ladder/games/${id}/reveal`, undefined, { "x-host-token": hostToken }),
+};
+
+const player = (token: string | null): Record<string, string> => (token ? { "x-player-token": token } : {});
+
+export const bingoApi = {
+  create: (req: CreateBingoRequest) => request<JoinedBingo>("POST", "/api/bingo/games", req),
+  get: (id: string, token: string | null) => request<BingoView>("GET", `/api/bingo/games/${id}`, undefined, player(token)),
+  join: (id: string, name: string) => request<JoinedBingo>("POST", `/api/bingo/games/${id}/players`, { name }),
+  setBoard: (id: string, token: string, board: number[]) =>
+    request<BingoView>("PUT", `/api/bingo/games/${id}/board`, { board }, player(token)),
+  start: (id: string, token: string) => request<BingoView>("POST", `/api/bingo/games/${id}/start`, {}, player(token)),
+  call: (id: string, token: string, value?: number) =>
+    request<BingoView>("POST", `/api/bingo/games/${id}/calls`, value === undefined ? {} : { value }, player(token)),
 };

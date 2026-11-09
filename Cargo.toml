@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/core", "crates/api"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "UNLICENSED"
 publish = false
@@ -13,7 +13,7 @@ game-core = { path = "crates/core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -23,6 +23,7 @@ getrandom = "0.3"
 uuid = { version = "1", features = ["v4", "serde"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "mysql", "macros", "migrate"] }
 redis = { version = "0.32", default-features = false, features = ["tokio-comp", "connection-manager", "script"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 
 [profile.release]
 lto = "thin"
