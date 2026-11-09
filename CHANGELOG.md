@@ -2,6 +2,17 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.5.0] - 2026-11-09
+
+### Added
+- `game_core::games::pinball`: Rust·TS 에서 비트 단위로 같은 결과를 내는 결정적 핀볼 엔진(테이블 v1) — 플리퍼·슬링샷·범퍼·기둥·센서·배수, 120Hz 고정 틱
+- 서버 재시뮬레이션 점수 검증: 브라우저는 입력 기록만 제출, 서버가 `replay` 로 점수 계산. 한 판 한 번 제출, 실제 경과 시간 검사, 판마다 시드로 발사·범퍼 세기 변화
+- API: `/api/pinball/sessions`, `/finish`, `/scores` 와 `pinball_scores` 테이블(오늘 KST · 전체 상위 10)
+- 프론트엔드: 핀볼 화면(캔버스, 키보드·터치 버튼, 연습 모드, 점수표), TS 엔진 포팅과 Rust 기준값 교차 테스트(`pinball_fixtures`)
+
+### Changed
+- 핀볼은 Matter.js 대신 자체 결정적 엔진 사용 (`docs/games-pinball.md` 에 이유와 한계)
+
 ## [0.4.0] - 2026-11-09
 
 ### Added

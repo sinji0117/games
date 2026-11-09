@@ -9,6 +9,8 @@ pub struct Config {
     pub session_ttl_secs: u64,
     /// 리버스 프록시 뒤에서 X-Forwarded-For 를 신뢰할지
     pub trust_proxy: bool,
+    /// 핀볼 제출 시 "게임 시간 ≤ 실제 흐른 시간" 검사 (테스트에서만 끔)
+    pub pinball_realtime_check: bool,
 }
 
 pub const DEFAULT_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
@@ -31,6 +33,7 @@ impl Config {
                 .filter(|&v| v > 0)
                 .unwrap_or(DEFAULT_SESSION_TTL_SECS),
             trust_proxy: get("TRUST_PROXY").is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes")),
+            pinball_realtime_check: true,
         }
     }
 
@@ -43,6 +46,7 @@ impl Config {
             redis_url: None,
             session_ttl_secs: DEFAULT_SESSION_TTL_SECS,
             trust_proxy: false,
+            pinball_realtime_check: true,
         }
     }
 }

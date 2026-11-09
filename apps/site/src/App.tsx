@@ -5,6 +5,7 @@ import { LadderRoom } from "./pages/ladder/LadderRoom.tsx";
 import { LadderSetup } from "./pages/ladder/LadderSetup.tsx";
 import { BingoRoom } from "./pages/bingo/BingoRoom.tsx";
 import { BingoSetup } from "./pages/bingo/BingoSetup.tsx";
+import { PinballPage } from "./pages/pinball/PinballPage.tsx";
 
 export function App() {
   const route = useRoute();
@@ -22,6 +23,7 @@ export function App() {
         {route.name === "ladder-room" && <LadderRoom key={route.id} id={route.id} />}
         {route.name === "bingo-new" && <BingoSetup />}
         {route.name === "bingo-room" && <BingoRoom key={route.id} id={route.id} />}
+        {route.name === "pinball" && <PinballPage />}
         {route.name === "not-found" && (
           <section className="empty">
             <h1>없는 페이지예요</h1>

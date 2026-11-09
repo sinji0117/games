@@ -133,6 +133,27 @@
 ## WebSocket — `GET /api/ws/{game}/{id}`
 `game` 은 `ladder` | `bingo`. 방이 바뀔 때마다 `{ "type": "changed", … }` 를 보냅니다. 메시지 형식과 동작은 [redis-pubsub.md](redis-pubsub.md).
 
+## 핀볼
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| POST | `/api/pinball/sessions` | 판 열기 → 201 `{ id, seed, table: "v1", max_ticks, ticks_per_second }` |
+| POST | `/api/pinball/sessions/{id}/finish` | 입력 기록 제출 → 서버가 다시 계산한 점수 |
+| GET | `/api/pinball/scores` | `{ today: [...], all: [...] }` 상위 10, 항목은 `{ name, score, seconds, created_at }` |
+
+### 제출
+```json
+{
+  "name": "민지",
+  "inputs": [{ "tick": 30, "action": "plunger_down" }, { "tick": 95, "action": "plunger_up" }, { "tick": 410, "action": "left_down" }],
+  "claimed_score": 5830
+}
+```
+- `action`: `left_down` `left_up` `right_down` `right_up` `plunger_down` `plunger_up`. 입력은 그 틱이 시작될 때 적용
+- 틱은 줄어들지 않아야 하고 108,000 미만, 최대 50,000개
+- 응답 `{ score, ticks, game_over, matches_client, rank_today, rank_all }` — `score` 는 서버 계산값, `claimed_score` 는 비교에만 씀
+- 409: 이미 제출한 판. 422: 입력 형식 오류, 또는 게임 시간이 실제로 흐른 시간보다 김 (판이 소모되므로 다시 열어야 함)
+- 판 수명 1시간. 레이트 리밋: 열기·제출 각각 IP 당 30/분
+
 ## 예정
-- 5단계: 핀볼 세션·점수 제출
 - 6단계: `/api/auth/*`, `/api/rankings/{game}`

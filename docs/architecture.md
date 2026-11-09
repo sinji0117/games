@@ -37,6 +37,7 @@
 | 확정된 게임 결과 · 전적 | MariaDB | 결과 확정 시 1회 기록 |
 | 진행 중 방 상태 | Redis (TTL 24h) | 부재 시 MariaDB `game_sessions` 폴백 |
 | 공개된 사다리 결과 | MariaDB `ladder_results` | 세션 만료 후에도 공유 링크로 조회 |
+| 핀볼 점수 | MariaDB `pinball_scores` | 서버가 재계산한 점수만 기록 |
 | 랭킹 | Redis Sorted Set | 6단계 (계정과 함께) |
 | 레이트 리밋 | Redis | 부재 시 프로세스 메모리 카운터 |
 

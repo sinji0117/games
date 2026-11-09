@@ -21,7 +21,12 @@ const GAMES = [
     about: "숫자나 단어로 판을 채우고, 번호를 뽑거나 돌아가며 불러 먼저 줄을 완성해요.",
     href: "#/bingo/new",
   },
-  { key: "pinball", name: "핀볼", about: "공을 튕겨 점수를 모으고 랭킹에 도전해요.", href: null },
+  {
+    key: "pinball",
+    name: "핀볼",
+    about: "플리퍼로 공을 살려 점수를 모아요. 점수는 서버가 입력 기록으로 다시 계산해 확정해요.",
+    href: "#/pinball",
+  },
 ] as const;
 
 function DemoLadder() {
