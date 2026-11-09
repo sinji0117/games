@@ -23,7 +23,7 @@ pnpm install && pnpm -r build              # apps/*/dist
 - 리버스 프록시(nginx/Rpanel) 뒤에 둘 때는 `TRUST_PROXY=true` 로 실제 클라이언트 IP 기준 레이트 리밋.
 
 ## 체크리스트
-- [ ] `cargo test --workspace`, `cargo clippy -- -D warnings` 통과
+- [ ] CI 초록불 (`cargo test --workspace`, `clippy -D warnings`, 웹 빌드 포함)
 - [ ] `bump-version.py` 로 버전 갱신 + CHANGELOG
 - [ ] DB 마이그레이션 적용 (서버 시작 로그 "마이그레이션 완료" 확인)
 - [ ] `/api/health` 의 `version`, `storage.redis`·`storage.mariadb` 가 `ok` 인지 확인

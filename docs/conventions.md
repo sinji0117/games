@@ -28,6 +28,11 @@
 - 실행 후 `CHANGELOG.md` 의 새 섹션에 Added / Changed / Fixed 를 기록
 - 0.x 동안: 새 기능·단계 완료는 MINOR, 버그 수정은 PATCH
 
+## CI (`.github/workflows/ci.yml`)
+- PR 과 `main` 푸시마다: Rust `fmt --check`·`clippy -D warnings`·`test --workspace`, 기준값(`*_fixtures`) 최신 여부, 웹 `typecheck`·`test`·`build`
+- 초록불이 아니면 병합하지 않습니다
+- 의존성을 바꾸면 잠금 파일(`Cargo.lock`, `pnpm-lock.yaml`)도 함께 커밋합니다. 로컬에서 만들 수 없으면 CI 로그의 `LOCKFILE` 줄(gzip+base64)에서 꺼냅니다
+
 ## Git
 - 브랜치: `main` 보호, 작업은 `feat/<주제>`, `fix/<주제>`
 - 커밋 메시지: `feat(ladder): 가로선 추가 API` 처럼 `type(scope): 요약`
