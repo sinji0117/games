@@ -2,6 +2,24 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.3.0] - 2026-11-09
+
+### Added
+- `game_core::store`: 세션 저장소 인터페이스(`SessionBackend`), Redis → MariaDB 폴백(`FailoverStore`), 버전 비교 후 교체(CAS) 재시도, 메모리 백엔드
+- `game_core::ratelimit`: 고정 윈도 레이트 리밋 규칙과 메모리 카운터
+- `LadderSnapshot` / `LadderGame::restore`: 저장·복원 (복원 시 규칙 재검증)
+- API: Redis 세션 백엔드(Lua CAS), MariaDB 세션 백엔드, 사다리 결과 보관소(`ladder_results`)
+- 공개된 사다리는 세션 만료 후에도 같은 링크로 조회
+- 레이트 리밋: 사다리 생성 20/분, 가로선 60/분 (IP 기준, `TRUST_PROXY`)
+- `/api/health` 에 저장소 상태(`storage`), 하나라도 장애면 `degraded`
+- `migrations/` (sqlx 자동 적용), `docker-compose.yml` (MariaDB 10.11 + Redis 7)
+- 에러 코드 `busy`(409), `rate_limited`(429), `unavailable`(503) 및 `Retry-After`
+
+### Changed
+- 방장 토큰을 원문 대신 sha256 해시로 저장
+- `SESSION_TTL_SECS` 로 방 수명 설정 (기본 24시간)
+- 랭킹은 계정과 함께 6단계로 이동
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

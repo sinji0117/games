@@ -3,11 +3,15 @@
 pub struct Config {
     pub bind: String,
     pub cors_origins: Vec<String>,
-    /// 2단계(MariaDB 연결)에서 사용
     pub database_url: Option<String>,
-    /// 2단계(Redis 연결)에서 사용. 없으면 MariaDB/인메모리 폴백
     pub redis_url: Option<String>,
+    /// 방 수명 (초)
+    pub session_ttl_secs: u64,
+    /// 리버스 프록시 뒤에서 X-Forwarded-For 를 신뢰할지
+    pub trust_proxy: bool,
 }
+
+pub const DEFAULT_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
 
 impl Config {
     pub fn from_env() -> Self {
@@ -22,6 +26,23 @@ impl Config {
                 .collect(),
             database_url: get("DATABASE_URL"),
             redis_url: get("REDIS_URL"),
+            session_ttl_secs: get("SESSION_TTL_SECS")
+                .and_then(|v| v.parse().ok())
+                .filter(|&v| v > 0)
+                .unwrap_or(DEFAULT_SESSION_TTL_SECS),
+            trust_proxy: get("TRUST_PROXY").is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes")),
+        }
+    }
+
+    /// 외부 저장소 없이 동작하는 설정 (테스트 · 로컬 체험용)
+    pub fn in_memory() -> Self {
+        Self {
+            bind: "127.0.0.1:0".into(),
+            cors_origins: vec![],
+            database_url: None,
+            redis_url: None,
+            session_ttl_secs: DEFAULT_SESSION_TTL_SECS,
+            trust_proxy: false,
         }
     }
 }

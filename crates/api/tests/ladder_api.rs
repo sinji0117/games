@@ -142,3 +142,122 @@ async fn validation_and_not_found() {
     .await;
     assert_eq!(st, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn health_reports_storage() {
+    let app = app(AppState::new());
+    let (_, body) = call(&app, "GET", "/api/health", None, None).await;
+    assert_eq!(body["storage"]["sessions"], "memory");
+    assert_eq!(body["storage"]["redis"], "off");
+    assert_eq!(body["storage"]["mariadb"], "off");
+}
+
+#[tokio::test]
+async fn rate_limit_on_create() {
+    let app = app(AppState::new());
+    let cfg = json!({ "participants": ["a", "b"], "outcomes": ["x", "y"] });
+    for _ in 0..game_api::ratelimit::LADDER_CREATE.max {
+        let (st, _) = call(&app, "POST", "/api/ladder/games", Some(cfg.clone()), None).await;
+        assert_eq!(st, StatusCode::CREATED);
+    }
+    let (st, body) = call(&app, "POST", "/api/ladder/games", Some(cfg), None).await;
+    assert_eq!(st, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(body["error"]["code"], "rate_limited");
+}
+
+#[tokio::test]
+async fn host_token_required_and_rungs_persist() {
+    let app = app(AppState::new());
+    let cfg = json!({ "participants": ["a", "b", "c", "d"], "outcomes": ["1", "2", "3", "4"] });
+    let (_, created) = call(&app, "POST", "/api/ladder/games", Some(cfg), None).await;
+    let id = created["id"].as_str().unwrap();
+
+    // 놓을 수 있는 칸을 찾을 때까지 시도 (숨은 가로선과 겹치면 422)
+    let mut placed = None;
+    'outer: for row in 0..10 {
+        for col in 0..3 {
+            let (st, body) = call(
+                &app,
+                "POST",
+                &format!("/api/ladder/games/{id}/rungs"),
+                Some(json!({"row": row, "col": col})),
+                None,
+            )
+            .await;
+            if st == StatusCode::OK {
+                placed = Some((row, col, body));
+                break 'outer;
+            }
+            assert_eq!(st, StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(body["error"]["message"], "이 위치에는 가로선을 놓을 수 없습니다");
+        }
+    }
+    let (row, col, _) = placed.expect("놓을 칸이 있어야 함");
+    let (_, fetched) = call(&app, "GET", &format!("/api/ladder/games/{id}"), None, None).await;
+    let rungs = fetched["rungs"].as_array().unwrap();
+    assert_eq!(rungs.len(), 1);
+    assert_eq!(
+        (rungs[0]["row"].as_u64(), rungs[0]["col"].as_u64()),
+        (Some(row), Some(col))
+    );
+
+    let (st, _) = call(
+        &app,
+        "POST",
+        &format!("/api/ladder/games/{id}/reveal"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(st, StatusCode::FORBIDDEN, "토큰 없이 공개 불가");
+}
+
+#[tokio::test]
+async fn revealed_result_survives_session_expiry() {
+    let mut config = game_api::config::Config::in_memory();
+    config.session_ttl_secs = 1;
+    let app = app(AppState::in_memory_with(&config));
+    let cfg = json!({ "participants": ["a", "b"], "outcomes": ["x", "y"] });
+    let (_, created) = call(&app, "POST", "/api/ladder/games", Some(cfg), None).await;
+    let id = created["id"].as_str().unwrap().to_string();
+    let token = created["host_token"].as_str().unwrap().to_string();
+    let (st, revealed) = call(
+        &app,
+        "POST",
+        &format!("/api/ladder/games/{id}/reveal"),
+        None,
+        Some(&token),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+
+    tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+
+    let (st, later) = call(&app, "GET", &format!("/api/ladder/games/{id}"), None, None).await;
+    assert_eq!(st, StatusCode::OK, "세션 만료 후에도 보관된 결과 조회");
+    assert_eq!(later["reveal"], revealed["reveal"]);
+    assert_eq!(later["rungs"], revealed["rungs"]);
+
+    let (st, _) = call(
+        &app,
+        "POST",
+        &format!("/api/ladder/games/{id}/rungs"),
+        Some(json!({"row": 0, "col": 0})),
+        None,
+    )
+    .await;
+    assert_eq!(st, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn unrevealed_game_expires() {
+    let mut config = game_api::config::Config::in_memory();
+    config.session_ttl_secs = 1;
+    let app = app(AppState::in_memory_with(&config));
+    let cfg = json!({ "participants": ["a", "b"], "outcomes": ["x", "y"] });
+    let (_, created) = call(&app, "POST", "/api/ladder/games", Some(cfg), None).await;
+    let id = created["id"].as_str().unwrap().to_string();
+    tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+    let (st, _) = call(&app, "GET", &format!("/api/ladder/games/{id}"), None, None).await;
+    assert_eq!(st, StatusCode::NOT_FOUND);
+}

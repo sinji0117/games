@@ -9,7 +9,8 @@
         ▼
 [crates/api  — Axum]
   routes/      HTTP 입출력, 인증 토큰 확인, 에러 → 상태 코드 매핑
-  store        세션 저장소 (1단계: 메모리 → 3단계: Redis + MariaDB)
+  storage/     Redis · MariaDB 어댑터, 결과 보관소
+  ratelimit    레이트 리밋 (Redis INCR → 실패 시 메모리)
   fairness     커밋-공개 시드, 토큰 생성
         │ 순수 함수 호출
         ▼
@@ -17,6 +18,8 @@
   game_common  GameKind · GamePhase · GameModule 트레이트 · 공통 검증
   games/*      게임별 엔진 (I/O 없음, 결정적)
   rng          SeededRng (SplitMix64 + xoshiro256**)
+  store        SessionBackend 트레이트 · FailoverStore(폴백 · CAS 재시도) · MemoryBackend
+  ratelimit    고정 윈도 규칙 · 메모리 카운터
 ```
 
 **원칙**
@@ -31,12 +34,35 @@
 | 계정, 프로필, 포인트 | MariaDB | 원본 |
 | 확정된 게임 결과 · 전적 | MariaDB | 결과 확정 시 1회 기록 |
 | 진행 중 방 상태 | Redis (TTL 24h) | 부재 시 MariaDB `game_sessions` 폴백 |
-| 랭킹 | Redis Sorted Set | 주기적으로 MariaDB 에서 재구성 가능 |
-| 레이트 리밋 | Redis | 부재 시 프로세스 메모리 토큰 버킷 |
+| 공개된 사다리 결과 | MariaDB `ladder_results` | 세션 만료 후에도 공유 링크로 조회 |
+| 랭킹 | Redis Sorted Set | 6단계 (계정과 함께) |
+| 레이트 리밋 | Redis | 부재 시 프로세스 메모리 카운터 |
 
-현재(0.1.0)는 `store::MemoryStore` 하나로 동작하며, 핸들러는 저장소의 `insert/read/update` 만 사용하므로 3단계에서 내부 구현만 교체합니다.
+### 설정별 동작 (0.3.0)
+
+| REDIS_URL | DATABASE_URL | 진행 중 세션 | 공개된 결과 |
+| --- | --- | --- | --- |
+| ✓ | ✓ | Redis → 장애 시 MariaDB | MariaDB |
+| ✓ | – | Redis | 메모리 |
+| – | ✓ | MariaDB | MariaDB |
+| – | – | 메모리 | 메모리 |
+
+시작 시 연결에 실패한 저장소는 경고만 남기고 빼고 동작합니다. Redis 는 한 번 연결되면 끊겨도 자동 재연결합니다.
+
+### 폴백 규칙 (`game_core::store::FailoverStore`, 테스트로 보장)
+- **생성**: 1차가 `Unavailable` 이면 2차에 저장
+- **조회**: 1차에 없거나 1차가 죽어 있으면 2차 조회 → 1차 장애 중 2차에 만든 방도 1차 복구 후 계속 동작
+- **수정**: 세션을 찾은 쪽에서 버전 비교 후 교체(CAS). 다른 요청이 먼저 바꿨으면 최신 값으로 최대 8번 다시 시도
+- 1차가 죽어 있고 2차에도 없으면 404 가 아니라 503 (없다고 단정하지 않음)
+- 모든 외부 호출은 2초 제한, 넘으면 `Unavailable`
+
+### 결과 보관
+결과 공개 시 `ladder_results` 에 한 번 기록(`INSERT IGNORE`)하고 세션에 `archived` 표시를 남깁니다.
+기록이 실패해도 사용자 응답은 막지 않으며, 다음 조회 때 다시 기록합니다.
 
 ## 공정성 (commit-reveal)
+
+방장 토큰은 원문 대신 sha256 해시만 저장합니다.
 
 1. 방 생성 시 서버가 OS 난수로 `seed`(64bit)·`nonce`(128bit) 를 뽑고 `commitment = sha256(seed_hex:nonce_hex)` 를 공개합니다.
 2. 진행 중에는 결과를 결정하는 비밀 정보(사다리의 기본 가로선 등)를 숨깁니다.
