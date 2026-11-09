@@ -1,0 +1,29 @@
+[package]
+name = "game-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "미니게임 플랫폼 API 서버 (Axum)"
+
+[[bin]]
+name = "game-api"
+path = "src/main.rs"
+
+[dependencies]
+game-core = { workspace = true, features = ["serde"] }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+getrandom = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

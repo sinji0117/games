@@ -1,0 +1,67 @@
+/* 공용 디자인 토큰 — 모든 앱은 이 변수만 사용합니다. */
+:root {
+  --c-bg: #f6f5f2;
+  --c-surface: #ffffff;
+  --c-surface-2: #efede8;
+  --c-text: #1d1c1a;
+  --c-text-muted: #6b6862;
+  --c-border: #dcd8d0;
+  --c-primary: #e2552b;
+  --c-primary-text: #ffffff;
+  --c-accent: #2b7de2;
+  --c-success: #1f9d55;
+  --c-danger: #d93a3a;
+
+  /* 사다리 경로 색상 (참가자 순서대로 순환) */
+  --c-lane-1: #e2552b;
+  --c-lane-2: #2b7de2;
+  --c-lane-3: #1f9d55;
+  --c-lane-4: #b04ad9;
+  --c-lane-5: #e2a52b;
+  --c-lane-6: #14a3a3;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --font-sans: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-bg: #141413;
+    --c-surface: #1e1d1b;
+    --c-surface-2: #292825;
+    --c-text: #f2f0eb;
+    --c-text-muted: #a19d95;
+    --c-border: #3a3834;
+    --c-primary: #f06a40;
+    --c-accent: #5c9cf0;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --c-bg: #141413;
+  --c-surface: #1e1d1b;
+  --c-surface-2: #292825;
+  --c-text: #f2f0eb;
+  --c-text-muted: #a19d95;
+  --c-border: #3a3834;
+  --c-primary: #f06a40;
+  --c-accent: #5c9cf0;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+}
