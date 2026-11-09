@@ -42,6 +42,11 @@ path += (x, rows + 1)
 클라이언트는 `path` 의 점을 순서대로 직선으로 이으면 됩니다. 세로 구간은 `y` 증가, 가로 구간은 `x` ±1.
 화면 좌표 변환 예: `px = padX + x * colGap`, `py = padY + y * (height / (rows + 1))`.
 
+## 저장
+- 진행 중: `LadderSession { snapshot, seed, nonce, host_token_hash, created_at, revealed_at, archived }` 를 JSON 으로 세션 저장소에.
+  `LadderSnapshot` 은 이름·결과·행 수·밀도·전체 가로선·공개 여부만 담고, 결과는 복원 시 다시 계산합니다 (`LadderGame::restore` 가 모든 규칙을 재검증).
+- 공개 후: `ladder_results` 에 스냅샷·시드·논스·커밋을 기록 → 방 만료 후에도 같은 링크로 결과와 검증 정보 조회.
+
 ## 진행 흐름과 공정성
 1. **생성** `POST /api/ladder/games` → `commitment`, `host_token` 발급. 기본 가로선은 **숨김**.
 2. **가로선 추가** `POST /games/{id}/rungs` — 누구나. 숨은 가로선과 겹치면 사유를 감춘 422 를 반환합니다

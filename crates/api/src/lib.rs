@@ -1,12 +1,14 @@
 //! API 서버 라이브러리 루트. `main.rs` 는 설정을 읽어 [`app`] 을 띄우기만 합니다.
 //! 통합 테스트도 [`app`] 을 직접 호출합니다.
 
+pub mod client_ip;
 pub mod config;
 pub mod error;
 pub mod fairness;
+pub mod ratelimit;
 pub mod routes;
 pub mod state;
-pub mod store;
+pub mod storage;
 
 use axum::Router;
 

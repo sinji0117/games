@@ -98,6 +98,18 @@ pub struct LadderResult {
     pub path: Vec<Point>,
 }
 
+/// 저장·복원용 상태. 결과(`results`)는 가로선에서 결정적으로 다시 계산되므로 저장하지 않습니다.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LadderSnapshot {
+    pub participants: Vec<String>,
+    pub outcomes: Vec<String>,
+    pub rows: usize,
+    pub density: f64,
+    pub rungs: Vec<Rung>,
+    pub finished: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct LadderGame {
     participants: Vec<String>,
@@ -221,6 +233,34 @@ impl LadderGame {
             };
             self.set(row, col, Some(RungSource::Generated));
         }
+    }
+
+    // ---------- 저장 / 복원 ----------
+
+    pub fn snapshot(&self) -> LadderSnapshot {
+        LadderSnapshot {
+            participants: self.participants.clone(),
+            outcomes: self.outcomes.clone(),
+            rows: self.rows,
+            density: self.density,
+            rungs: self.rungs(),
+            finished: self.phase == GamePhase::Finished,
+        }
+    }
+
+    /// 저장된 상태를 다시 검증하며 복원합니다. 손상된 데이터는 에러로 거부합니다.
+    pub fn restore(s: LadderSnapshot) -> GameResult<Self> {
+        let config = LadderConfig {
+            participants: s.participants,
+            outcomes: s.outcomes,
+            rows: Some(s.rows),
+            density: Some(s.density),
+        };
+        let mut game = Self::with_rungs(config, &s.rungs)?;
+        if s.finished {
+            game.finish()?;
+        }
+        Ok(game)
     }
 
     // ---------- 조회 ----------
@@ -622,6 +662,49 @@ mod tests {
         assert!(matches!(g.add_player_rung(0, 0), Err(GameError::InvalidState(_))));
         // 두 번 호출해도 같은 결과
         assert_eq!(g.finish().unwrap(), &results);
+    }
+
+    #[test]
+    fn snapshot_roundtrip() {
+        for seed in 0..100u64 {
+            let mut g = LadderGame::create(cfg(6), seed).unwrap();
+            // 놓을 수 있는 첫 칸에 참가자 가로선
+            'outer: for row in 0..g.rows() {
+                for col in 0..g.gaps() {
+                    if g.add_player_rung(row, col).is_ok() {
+                        break 'outer;
+                    }
+                }
+            }
+            if seed % 2 == 0 {
+                g.finish().unwrap();
+            }
+            let back = LadderGame::restore(g.snapshot()).unwrap();
+            assert_eq!(back.snapshot(), g.snapshot());
+            assert_eq!(back.phase(), g.phase());
+            assert_eq!(back.results(), g.results());
+            assert_eq!(back.mapping(), g.mapping());
+        }
+    }
+
+    #[test]
+    fn restore_rejects_corrupt_snapshot() {
+        let mut s = LadderGame::create(cfg(3), 1).unwrap().snapshot();
+        s.rungs.push(Rung {
+            row: 0,
+            col: 0,
+            source: RungSource::Player,
+        });
+        s.rungs.push(Rung {
+            row: 0,
+            col: 1,
+            source: RungSource::Player,
+        });
+        assert!(LadderGame::restore(s).is_err(), "인접/중복 가로선은 복원 불가");
+
+        let mut s = LadderGame::create(cfg(3), 1).unwrap().snapshot();
+        s.outcomes.pop();
+        assert!(LadderGame::restore(s).is_err());
     }
 
     #[test]

@@ -39,6 +39,19 @@ impl Secret {
     pub fn commitment(&self) -> String {
         commitment_of(&self.seed_hex(), &self.nonce_hex())
     }
+
+    /// 저장된 hex 값으로 복원
+    pub fn from_hex(seed_hex: &str, nonce_hex: &str) -> Option<Self> {
+        let seed = u64::from_str_radix(seed_hex, 16).ok()?;
+        let bytes = hex::decode(nonce_hex).ok()?;
+        let nonce: [u8; 16] = bytes.try_into().ok()?;
+        Some(Self { seed, nonce })
+    }
+}
+
+/// 방장 토큰은 원문 대신 해시만 저장합니다 (저장소가 유출돼도 공개 권한을 얻을 수 없음).
+pub fn hash_token(token: &str) -> String {
+    hex::encode(Sha256::digest(token.as_bytes()))
 }
 
 pub fn commitment_of(seed_hex: &str, nonce_hex: &str) -> String {
@@ -80,6 +93,22 @@ mod tests {
             commitment_of("00000000deadbeef", &"07".repeat(16))
         );
         assert_eq!(s.commitment().len(), 64);
+    }
+
+    #[test]
+    fn hex_roundtrip() {
+        let s = Secret::generate();
+        let back = Secret::from_hex(&s.seed_hex(), &s.nonce_hex()).unwrap();
+        assert_eq!((back.seed, back.nonce), (s.seed, s.nonce));
+        assert!(Secret::from_hex("zz", &s.nonce_hex()).is_none());
+        assert!(Secret::from_hex(&s.seed_hex(), "00").is_none());
+    }
+
+    #[test]
+    fn token_hash_is_stable() {
+        assert_eq!(hash_token("a"), hash_token("a"));
+        assert_ne!(hash_token("a"), hash_token("b"));
+        assert_eq!(hash_token("a").len(), 64);
     }
 
     #[test]

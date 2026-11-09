@@ -12,13 +12,30 @@
 | `invalid_state` | 409 |
 | `not_found` | 404 |
 | `forbidden` | 403 |
+| `busy` | 409 (같은 방 동시 수정 충돌이 재시도 한도 초과) |
+| `rate_limited` | 429 (`Retry-After` 헤더) |
+| `unavailable` | 503 (저장소 연결 불가, `Retry-After: 5`) |
 | `internal` | 500 |
+
+### 레이트 리밋
+| 범위 | 한도 |
+| --- | --- |
+| 사다리 생성 | IP 당 20회/분 |
+| 가로선 추가 | IP 당 60회/분 |
+
+`TRUST_PROXY=true` 일 때만 `X-Forwarded-For` 첫 주소를 IP 로 사용합니다.
 
 ## 공통
 ### `GET /api/health`
 ```json
-{ "status": "ok", "version": "0.1.0", "games": ["ladder", "bingo", "pinball"] }
+{
+  "status": "ok",
+  "version": "0.3.0",
+  "games": ["ladder", "bingo", "pinball"],
+  "storage": { "sessions": "redis → mariadb", "results": "mariadb", "redis": "ok", "mariadb": "ok" }
+}
 ```
+`redis`/`mariadb` 는 `ok` · `down` · `off`(설정 안 함). 하나라도 `down` 이면 `status: "degraded"`.
 
 ## 사다리
 
@@ -43,6 +60,7 @@
 
 ### `GET /api/ladder/games/{id}` → 200 `LadderView`
 공개 전 `rungs` 에는 `source: "player"` 가로선만 있습니다. 공개 후에는 전체 + `reveal` 필드가 붙습니다.
+공개된 사다리는 방이 만료(기본 24시간)된 뒤에도 결과 보관소에서 같은 형식으로 내려갑니다. 공개 전에 만료되면 404.
 
 ### `POST /api/ladder/games/{id}/rungs` → 200 `LadderView`
 ```json
