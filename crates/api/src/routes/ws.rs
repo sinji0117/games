@@ -40,11 +40,12 @@ struct Slot;
 
 impl Slot {
     fn take() -> Option<Self> {
-        OPEN.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-            (n < MAX_CONNECTIONS).then_some(n + 1)
-        })
-        .ok()
-        .map(|_| Slot)
+        // 먼저 늘리고 넘쳤으면 되돌림 (툴체인 버전에 따라 이름이 바뀐 fetch_update 를 피함)
+        if OPEN.fetch_add(1, Ordering::AcqRel) >= MAX_CONNECTIONS {
+            OPEN.fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(Slot)
     }
 }
 
