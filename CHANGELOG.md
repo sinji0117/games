@@ -2,6 +2,13 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.8.1] - 2026-11-10
+
+### Changed
+- 오픈소스 공개: MIT 라이선스(`LICENSE`, 저작권자 sinji0117), Cargo · package.json 의 `license` · `authors` · `repository`
+- README 를 Rpanel 형식으로 새로 씀 (배지, 이런 걸 할 수 있어요, 준비물, 설치하기 — Rpanel · Docker · 로컬, 설명서 표, 함께 만들기, 라이선스, 후원, 문의)
+- README 에 Rpanel Git 주소는 `https://` 로 넣으라는 안내 (SSH 주소는 Deploy key 가 없으면 `Permission denied (publickey)`)
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

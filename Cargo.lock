@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "game-api"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "argon2",
  "axum",
@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "game-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "serde",
 ]

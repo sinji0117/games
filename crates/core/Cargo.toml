@@ -3,6 +3,8 @@ name = "game-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish.workspace = true
 description = "미니게임 플랫폼 공통 로직: 에러, 결정적 난수, 게임 엔진"
 

@@ -1,7 +1,9 @@
 {
   "name": "games",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
+  "license": "MIT",
+  "author": "sinji0117",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "dev:site": "pnpm --filter @games/site dev",
