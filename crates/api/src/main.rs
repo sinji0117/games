@@ -3,9 +3,8 @@ use std::time::Duration;
 
 use axum::http::{HeaderValue, Method};
 use game_api::storage::MariaDbBackend;
-use game_api::{app, config::Config, state::now_secs, web, AppState};
+use game_api::{app_with, config::Config, state::now_secs, web, AppState};
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
@@ -47,20 +46,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers(Any);
 
-    let mut router = app(state);
-    if let Some(dir) = &config.static_dir {
-        // STATIC_DIR 를 주면 그 폴더에서. 화면 경로는 해시(#/...)라 index.html 하나면 충분
-        let index = std::path::Path::new(dir).join("index.html");
-        router = router.fallback_service(ServeDir::new(dir).not_found_service(ServeFile::new(index)));
-        tracing::info!(dir, "정적 파일 서빙 (폴더)");
-    } else {
-        router = router.fallback(web::serve);
-        if web::has_assets() {
-            tracing::info!("정적 파일 서빙 (바이너리 내장)");
-        } else {
-            tracing::warn!("내장된 화면 파일이 없습니다 — API 만 동작 (scripts/build-release.sh 로 빌드)");
+    match &config.static_dir {
+        Some(dir) => tracing::info!(dir, "정적 파일 서빙 (폴더)"),
+        None if web::has_assets() => tracing::info!("정적 파일 서빙 (바이너리 내장)"),
+        None => {
+            tracing::warn!("내장된 화면 파일이 없습니다 — API 만 동작 (scripts/build-release.sh 로 빌드)")
         }
     }
+    let router = app_with(state, config.static_dir.as_deref());
     let router = router.layer(cors).layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(&config.bind).await?;

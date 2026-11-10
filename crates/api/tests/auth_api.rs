@@ -217,3 +217,35 @@ async fn roulette_creator_gets_points_once() {
     .await;
     assert_eq!(r["me"]["points"], 5);
 }
+
+#[tokio::test]
+async fn roulette_points_stop_at_daily_cap() {
+    let app = app(AppState::new());
+    let auth = format!("Bearer {}", signup(&app, "룰렛왕").await);
+    let cfg = json!({ "entries": [{ "name": "a", "count": 1 }, { "name": "b", "count": 1 }], "map": "sprint", "winner_mode": "first", "winner_count": 1, "skills": false });
+    let cap = game_core::points::Reason::Roulette.daily_cap() as i64;
+    for _ in 0..cap + 3 {
+        let (st, _) = call(
+            &app,
+            "POST",
+            "/api/pinball/games",
+            Some(cfg.clone()),
+            &[("authorization", &auth)],
+        )
+        .await;
+        assert_eq!(
+            st,
+            StatusCode::CREATED,
+            "포인트 한도가 넘어도 게임은 계속 만들 수 있음"
+        );
+    }
+    let (_, r) = call(
+        &app,
+        "GET",
+        "/api/rankings?period=all",
+        None,
+        &[("authorization", &auth)],
+    )
+    .await;
+    assert_eq!(r["me"]["points"], cap * 5);
+}

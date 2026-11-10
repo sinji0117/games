@@ -11,7 +11,7 @@ use crate::auth::{award, hash_password, verify_password, RequireUser, SESSION_TT
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, ApiResult};
 use crate::fairness::{hash_token, random_token};
-use crate::ratelimit::{AUTH_LOGIN, AUTH_SIGNUP};
+use crate::ratelimit::{AUTH_LOGIN, AUTH_LOGIN_ACCOUNT, AUTH_SIGNUP};
 use crate::state::now_secs;
 use crate::storage::accounts::{CreateUserError, User};
 use crate::AppState;
@@ -86,6 +86,11 @@ async fn login(
     if req.password.chars().count() > game_core::points::PASSWORD_MAX {
         return Err(wrong());
     }
+    // 아이디를 키에 그대로 넣지 않도록 해시 앞부분만 사용
+    let account_key = hash_token(&req.username.trim().to_lowercase())[..16].to_string();
+    st.limiter
+        .check(&AUTH_LOGIN_ACCOUNT, &account_key, now_secs())
+        .await?;
     let Some((user, hash)) = st.accounts.find_login(req.username.trim()).await? else {
         return Err(wrong());
     };

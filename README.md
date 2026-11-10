@@ -6,7 +6,7 @@
 [![db](https://img.shields.io/badge/DB-MariaDB%20%C2%B7%20Redis-c0765a?logo=mariadb&logoColor=white)](docs/architecture.md)
 [![deploy](https://img.shields.io/badge/deploy-Rpanel%20%C2%B7%20Docker-2496ed)](#설치하기)
 [![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)](https://github.com/sinji0117/games/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.8.1-brightgreen)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.8.2-brightgreen)](CHANGELOG.md)
 [![stars](https://img.shields.io/github/stars/sinji0117/games?label=stars&color=yellow)](https://github.com/sinji0117/games/stargazers)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%ED%9B%84%EC%9B%90%ED%95%98%EA%B8%B0-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/bandiuri)
 
@@ -149,6 +149,10 @@ python3 scripts/bump-version.py X.Y.Z   # 버전은 이 스크립트로만 바�
 게임 엔진을 고쳤다면 Rust 쪽 기준값(`cargo run -p game-core --example …_fixtures`)도 다시 만들어 TS 테스트와 맞춰야 합니다. 자세한 규칙은 [코딩 · 버전 규칙](docs/conventions.md).
 
 버전별로 바뀐 점은 [변경 내역](CHANGELOG.md)을 보세요.
+
+## 보안
+
+취약점은 공개 이슈 대신 [비공개 제보](https://github.com/sinji0117/games/security/advisories/new)로 알려 주세요. 자세한 내용은 [SECURITY.md](SECURITY.md).
 
 ## 라이선스
 

@@ -2,6 +2,18 @@
 
 이 프로젝트는 `MAJOR.MINOR.PATCH` 형식을 따르며, 버전 변경은 `python3 scripts/bump-version.py <버전>`으로만 합니다.
 
+## [0.8.2] - 2026-11-10
+
+### Security
+- 포인트 사유별 **하루 한도** (빙고 참가 20 · 우승 10 · 사다리 공개 10 · 룰렛 10회): 방을 계속 만들어 랭킹을 올리는 것을 막음
+- **아이디별 로그인 제한** (15분 20회): 여러 IP 로 나눠 하는 비밀번호 대입 방지 (IP 별 분당 10회에 더해)
+- 모든 응답에 **보안 헤더**: CSP(같은 출처 스크립트만, Google Fonts 만 허용, iframe 금지), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `COOP`
+- **WebSocket**: IP 별 연결 분당 60회, 서버당 동시 5,000개, 받는 메시지 1KB 제한 (기본 64MB)
+- 아이디는 완성형 한글 · 영문 · 숫자 · `_` 만 (키릴 · 전각 문자로 남의 아이디 흉내 방지). 이미 있는 아이디는 그대로 로그인 가능
+- 메모리 레이트 리미터가 모든 범위의 끝난 윈도를 정리하고 상한을 둠 (키를 무작위로 바꿔 보내는 요청으로 메모리를 채우는 것 방지)
+- 개발용 `docker-compose.yml` 의 MariaDB · Redis 포트를 127.0.0.1 에만
+- CI: `permissions: contents: read`, `cargo audit` · `pnpm audit` 잡, Dependabot, `SECURITY.md`(비공개 제보 방법)
+
 ## [0.8.1] - 2026-11-10
 
 ### Changed

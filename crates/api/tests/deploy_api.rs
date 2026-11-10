@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 fn router(state: AppState) -> axum::Router {
-    app(state).fallback(web::serve)
+    app(state)
 }
 
 async fn get(app: &axum::Router, uri: &str) -> (StatusCode, Option<String>, Vec<u8>) {
@@ -91,4 +91,21 @@ async fn behind_proxy_rate_limit_uses_x_real_ip() {
         signup_from(&app, "b사람", "203.0.113.8").await,
         StatusCode::CREATED
     );
+}
+
+#[tokio::test]
+async fn security_headers_on_api_and_pages() {
+    let app = router(AppState::new());
+    for uri in ["/api/health", "/", "/api/nope"] {
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let h = res.headers();
+        assert_eq!(h["x-content-type-options"], "nosniff", "{uri}");
+        assert_eq!(h["x-frame-options"], "DENY", "{uri}");
+        let csp = h["content-security-policy"].to_str().unwrap();
+        assert!(
+            csp.contains("frame-ancestors 'none'") && csp.contains("script-src 'self'"),
+            "{uri}"
+        );
+    }
 }

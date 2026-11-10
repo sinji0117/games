@@ -64,8 +64,8 @@ impl Decision {
     }
 }
 
-/// (범위, 사용자) → (윈도 번호, 횟수)
-type Counters = HashMap<(&'static str, String), (u64, u64)>;
+/// (범위, 사용자) → (윈도 번호, 횟수, 윈도가 끝나는 시각)
+type Counters = HashMap<(&'static str, String), (u64, u64, u64)>;
 
 /// 메모리 카운터
 #[derive(Default)]
@@ -73,22 +73,39 @@ pub struct MemoryLimiter {
     counters: Mutex<Counters>,
 }
 
-/// 메모리 보호: 이 이상 키가 쌓이면 지난 윈도 키를 정리
+/// 메모리 보호: 이 이상 키가 쌓이면 끝난 윈도의 키를 모든 범위에서 정리
 const PRUNE_AT: usize = 50_000;
+/// 정리해도 이만큼 넘게 남으면 (지금 윈도 키가 너무 많음) 가장 먼저 끝나는 절반을 버림
+const HARD_MAX: usize = 200_000;
 
 impl MemoryLimiter {
     pub fn hit(&self, rule: &Rule, who: &str, now: u64) -> Decision {
         let window = rule.window(now);
         let mut map = self.counters.lock().expect("lock");
         if map.len() >= PRUNE_AT {
-            map.retain(|(scope, _), (w, _)| *scope != rule.scope || *w == window);
+            map.retain(|_, (_, _, ends)| *ends > now);
+            if map.len() >= HARD_MAX {
+                let mut ends: Vec<u64> = map.values().map(|v| v.2).collect();
+                let mid = ends.len() / 2;
+                let (_, cut, _) = ends.select_nth_unstable(mid);
+                let cut = *cut;
+                map.retain(|_, (_, _, e)| *e > cut);
+            }
         }
-        let entry = map.entry((rule.scope, who.to_string())).or_insert((window, 0));
+        let ends = (window + 1) * rule.window_secs;
+        let entry = map
+            .entry((rule.scope, who.to_string()))
+            .or_insert((window, 0, ends));
         if entry.0 != window {
-            *entry = (window, 0);
+            *entry = (window, 0, ends);
         }
         entry.1 += 1;
         rule.decide(entry.1, now)
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.counters.lock().expect("lock").len()
     }
 }
 
@@ -105,6 +122,19 @@ mod tests {
         assert_eq!(l.hit(&R, "ip1", 1), Decision::Allowed { remaining: 1 });
         assert_eq!(l.hit(&R, "ip1", 2), Decision::Allowed { remaining: 0 });
         assert_eq!(l.hit(&R, "ip1", 15), Decision::Limited { retry_after: 45 });
+    }
+
+    #[test]
+    fn prunes_finished_windows_of_every_scope() {
+        let l = MemoryLimiter::default();
+        let other = Rule::new("other", 3, 600);
+        for i in 0..PRUNE_AT {
+            l.hit(&R, &format!("a{i}"), 0);
+        }
+        l.hit(&other, "x", 0);
+        // 60초 뒤: R 의 첫 윈도는 끝났고 other(600초)는 아직
+        l.hit(&R, "new", 61);
+        assert_eq!(l.len(), 2, "끝난 윈도만 정리하고 other 와 새 키는 남김");
     }
 
     #[test]

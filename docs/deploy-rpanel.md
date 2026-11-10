@@ -127,6 +127,9 @@ Redis 나 MariaDB 가 잠시 끊겨도 앱은 꺼지지 않습니다 (Redis → 
   끊겨도 화면은 폴링으로 바뀌어 계속 동작합니다.
 - **실제 IP**: 레이트 리밋에 Rpanel Nginx 가 넘겨 주는 `X-Real-IP` 를 씁니다. 앞에 다른 프록시(Cloudflare 등)를 둔다면
   Rpanel 의 신뢰 프록시 설정을 맞춰야 방문자 IP 가 제대로 들어옵니다.
+- **보안 헤더**: 앱이 CSP · `X-Frame-Options` 등을 직접 붙이므로 Rpanel 앱 설정의 **CSP 는 비워 두세요** (둘 다 있으면 둘을 모두 만족해야 해서 화면이 깨질 수 있음).
+  https 를 붙인 뒤에는 앱 설정에서 **HTTPS 강제**를 켜면 Rpanel 이 HSTS 를 붙입니다.
+- **보안 제보**: [SECURITY.md](../SECURITY.md)
 - **업데이트**: 개발 쪽에서 `python3 scripts/bump-version.py X.Y.Z` → CHANGELOG → PR 병합 → (Webhook) 자동 배포.
   새 마이그레이션은 앱이 켜질 때 자동 적용됩니다. 적용된 마이그레이션 파일은 고치지 않습니다.
 

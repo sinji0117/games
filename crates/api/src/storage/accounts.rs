@@ -235,6 +235,8 @@ impl AccountRepo {
         now: u64,
     ) -> Result<bool, StoreError> {
         let delta = reason.points();
+        let day_start = game_core::points::kst_day_start(now);
+        let cap = i64::from(reason.daily_cap());
         match self {
             AccountRepo::Memory(m) => {
                 let mut m = m.lock().expect("lock");
@@ -242,6 +244,16 @@ impl AccountRepo {
                     .iter()
                     .any(|l| l.user_id == user_id && l.reason == reason.as_str() && l.ref_id == ref_id)
                 {
+                    return Ok(false);
+                }
+                let today = m
+                    .ledger
+                    .iter()
+                    .filter(|l| {
+                        l.user_id == user_id && l.reason == reason.as_str() && l.created_at >= day_start
+                    })
+                    .count() as i64;
+                if today >= cap {
                     return Ok(false);
                 }
                 let Some(u) = m.users.iter_mut().find(|u| u.user.id == user_id) else {
@@ -260,6 +272,26 @@ impl AccountRepo {
             AccountRepo::MariaDb(pool) => {
                 let work = async {
                     let mut tx = pool.begin().await?;
+                    // 사용자 행을 잠가 같은 사람의 지급을 한 줄로 세운 뒤 오늘 받은 횟수를 셈 (일일 한도)
+                    let exists: Option<(u64,)> =
+                        sqlx::query_as("SELECT id FROM users WHERE id = ? FOR UPDATE")
+                            .bind(user_id)
+                            .fetch_optional(&mut *tx)
+                            .await?;
+                    if exists.is_none() {
+                        return Ok(false);
+                    }
+                    let (today,): (i64,) = sqlx::query_as(
+                        "SELECT COUNT(*) FROM point_ledger WHERE user_id = ? AND reason = ? AND created_at >= ?",
+                    )
+                    .bind(user_id)
+                    .bind(reason.as_str())
+                    .bind(day_start)
+                    .fetch_one(&mut *tx)
+                    .await?;
+                    if today >= cap {
+                        return Ok(false);
+                    }
                     let inserted = sqlx::query(
                         "INSERT IGNORE INTO point_ledger (user_id, reason, ref_id, delta, created_at) VALUES (?, ?, ?, ?, ?)",
                     )
