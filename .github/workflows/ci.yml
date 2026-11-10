@@ -80,7 +80,7 @@ jobs:
           if cargo tree -p game-api -e normal,build -i libsqlite3-sys 2>/dev/null | grep -q libsqlite3-sys; then
             echo "::error::libsqlite3-sys 가 빌드에 들어갑니다 — RUSTSEC-2026-0459 무시를 지우고 sqlx 를 올리세요"; exit 1
           fi
-          echo "libsqlite3-sys 는 빌드에 없음
+          echo "libsqlite3-sys 는 빌드에 없음"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
