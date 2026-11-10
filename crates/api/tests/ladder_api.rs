@@ -215,7 +215,8 @@ async fn host_token_required_and_rungs_persist() {
 #[tokio::test]
 async fn revealed_result_survives_session_expiry() {
     let mut config = game_api::config::Config::in_memory();
-    config.session_ttl_secs = 1;
+    // 1초면 만들기와 공개 사이에 초 경계를 넘어 먼저 만료될 수 있어 2초 (만료 판정은 초 단위)
+    config.session_ttl_secs = 2;
     let app = app(AppState::in_memory_with(&config));
     let cfg = json!({ "participants": ["a", "b"], "outcomes": ["x", "y"] });
     let (_, created) = call(&app, "POST", "/api/ladder/games", Some(cfg), None).await;
@@ -231,7 +232,7 @@ async fn revealed_result_survives_session_expiry() {
     .await;
     assert_eq!(st, StatusCode::OK);
 
-    tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(3100)).await;
 
     let (st, later) = call(&app, "GET", &format!("/api/ladder/games/{id}"), None, None).await;
     assert_eq!(st, StatusCode::OK, "세션 만료 후에도 보관된 결과 조회");
