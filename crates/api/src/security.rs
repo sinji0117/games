@@ -5,11 +5,11 @@ use axum::http::{header, HeaderName, HeaderValue};
 use axum::middleware::Next;
 use axum::response::Response;
 
-/// 화면은 같은 출처의 스크립트만 실행. 글꼴만 Google Fonts 허용. 다른 사이트의 iframe 안에 넣을 수 없음
+/// 화면은 같은 출처의 스크립트 · 글꼴만 사용. 다른 사이트의 iframe 안에 넣을 수 없음
 pub const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
 script-src 'self'; \
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
-font-src 'self' https://fonts.gstatic.com; \
+style-src 'self' 'unsafe-inline'; \
+font-src 'self'; \
 img-src 'self' data: blob:; \
 connect-src 'self'; \
 object-src 'none'; \

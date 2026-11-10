@@ -1,14 +1,15 @@
-// 로그인 상태. 토큰은 localStorage 에 두고, 앱을 열 때 /api/auth/me 로 확인합니다(오늘 첫 방문 포인트도 여기서).
+// 로그인 상태. 토큰은 HttpOnly 쿠키라 화면 스크립트가 읽을 수 없고, 앱을 열 때 /api/auth/me 로 확인합니다
+// (오늘 첫 방문 포인트도 여기서).
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, authApi, setAuthToken } from "../api/client.ts";
+import { ApiError, authApi } from "../api/client.ts";
 import type { SessionView, User } from "../api/types.ts";
-import { load, save } from "./storage.ts";
 
-const TOKEN_KEY = "auth.token";
+/** 0.8.2 까지 localStorage 에 두던 토큰 — 남아 있으면 지움 */
+const LEGACY_TOKEN_KEY = "auth.token";
 
-function clearToken() {
+function clearLegacyToken() {
   try {
-    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(LEGACY_TOKEN_KEY);
   } catch {
     /* 무시 */
   }
@@ -36,32 +37,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [bonus, setBonus] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!load(TOKEN_KEY)) {
-      setUser(null);
-      return;
-    }
     try {
       const me = await authApi.me();
       setUser(me.user);
       if (me.daily_bonus) setBonus(me.daily_bonus);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        clearToken();
-        setAuthToken(null);
-        setUser(null);
-      }
+      if (err instanceof ApiError && err.status === 401) setUser(null);
     }
   }, []);
 
   useEffect(() => {
-    setAuthToken(load(TOKEN_KEY));
+    clearLegacyToken();
     refresh().finally(() => setReady(true));
   }, [refresh]);
 
   const adopt = useCallback(
     async (s: SessionView) => {
-      save(TOKEN_KEY, s.token);
-      setAuthToken(s.token);
       setUser(s.user);
       await refresh();
     },
@@ -80,8 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await authApi.logout();
         } finally {
-          clearToken();
-          setAuthToken(null);
           setUser(null);
         }
       },

@@ -25,6 +25,8 @@ pub struct AppState {
     pub db: Option<MySqlPool>,
     pub session_ttl_secs: u64,
     pub trust_proxy: bool,
+    /// 로그인 쿠키에 Secure 를 붙일지. None 이면 요청이 https 인지 보고 정함
+    pub cookie_secure: Option<bool>,
 }
 
 pub fn now_secs() -> u64 {
@@ -109,6 +111,7 @@ impl AppState {
             db,
             session_ttl_secs: config.session_ttl_secs,
             trust_proxy: config.trust_proxy,
+            cookie_secure: config.cookie_secure,
         }
     }
 

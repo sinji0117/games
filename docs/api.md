@@ -193,15 +193,18 @@
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| POST | `/api/auth/signup` | `{ "username", "password" }` → 201 `{ token, expires_at, user }` (409 아이디 중복) |
+| POST | `/api/auth/signup` | `{ "username", "password" }` → 201 `{ expires_at, user }` + 로그인 쿠키 (409 아이디 중복) |
 | POST | `/api/auth/login` | 같은 본문 → 200 같은 응답 (401 틀림) |
-| POST | `/api/auth/logout` | 토큰 무효화 → 204 |
+| POST | `/api/auth/logout` | 세션 삭제 · 쿠키 지움 → 204 |
 | GET | `/api/auth/me` | `{ user, daily_bonus }` — 오늘(KST) 처음 부르면 방문 포인트 지급 |
 
-- 로그인이 필요한 요청은 `Authorization: Bearer <token>`. 토큰은 30일 유효, 서버에는 sha256 해시만 저장
+- 로그인 토큰은 응답 본문에 없고 쿠키로만 옵니다: `mg_session=…; Path=/api; HttpOnly; SameSite=Lax; Max-Age=2592000` (https 면 `Secure`).
+  화면 스크립트는 토큰을 읽을 수 없고, 브라우저가 같은 출처의 `/api` 요청에 붙입니다. 30일 유효, 서버에는 sha256 해시만 저장
+- CSRF 방지: POST · PUT · DELETE 요청의 `Origin`(없으면 `Referer`) 호스트가 `Host` 와 다르면 로그인 쿠키를 무시합니다
+  (가입 · 로그인 · 로그아웃은 403). `Secure` 는 `COOKIE_SECURE` 가 없으면 `X-Forwarded-Proto: https` 로 판단
 - 아이디 2~20자(한글·영문·숫자·밑줄, 대소문자 구분 없이 고유), 비밀번호 8~128자(argon2id)
 - 게임은 로그인 없이도 됩니다. 로그인한 상태로 빙고 방 만들기·참가, 사다리 결과 공개, 핀볼 룰렛 만들기를 하면 포인트가 쌓입니다
-- 레이트 리밋: 가입 IP 당 10분에 5회, 로그인 1분에 10회
+- 레이트 리밋: 가입 IP 당 10분에 5회, 로그인 IP 당 1분에 10회 + 아이디당 15분에 20회
 - `user`: `{ id, username, points, created_at }`
 
 ## 랭킹 — `GET /api/rankings?period=week|all`

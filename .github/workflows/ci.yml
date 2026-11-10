@@ -121,7 +121,11 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4100/api/nope)" = 404
           # 루프백에만 열렸는지
           ! curl -fsS --max-time 2 "http://$(hostname -I | awk '{print $1}'):4100/api/health" > /dev/null 2>&1
-          cat server.log
+      - name: 실제 브라우저로 화면 확인 (CSP · 글꼴 · 쿠키)
+        run: node scripts/browser-smoke.mjs http://127.0.0.1:4100
+      - name: 서버 로그
+        if: always()
+        run: cat server.log
 
   docker:
     name: Docker 이미지 빌드

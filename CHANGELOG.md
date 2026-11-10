@@ -12,6 +12,11 @@
 - 아이디는 완성형 한글 · 영문 · 숫자 · `_` 만 (키릴 · 전각 문자로 남의 아이디 흉내 방지). 이미 있는 아이디는 그대로 로그인 가능
 - 메모리 레이트 리미터가 모든 범위의 끝난 윈도를 정리하고 상한을 둠 (키를 무작위로 바꿔 보내는 요청으로 메모리를 채우는 것 방지)
 - 개발용 `docker-compose.yml` 의 MariaDB · Redis 포트를 127.0.0.1 에만
+- **로그인을 HttpOnly 쿠키로**: 토큰을 응답 본문 · localStorage 에 두지 않고 `mg_session`(HttpOnly · SameSite=Lax · Path=/api, https 면 Secure) 쿠키로만. `Authorization: Bearer` 는 더 받지 않음
+- **CSRF 방지**: 상태를 바꾸는 요청은 `Origin` 호스트가 같을 때만 로그인 쿠키 인정, 다른 사이트의 가입 · 로그인 · 로그아웃은 403. `COOKIE_SECURE` 설정 추가
+- **글꼴 직접 서빙**: Google Fonts 대신 Jua · IBM Plex Sans KR 부분 글꼴(KS X 1001 2,350자, woff)을 `packages/ui/src/fonts` 에 넣음 — 방문자 IP 가 외부로 가지 않고 CSP 도 `'self'` 만. `scripts/subset-fonts.py`
+- CI: 실제 Chrome 으로 로비 · 사다리 · 빙고 · 핀볼 · 로그인 화면을 열어 CSP 위반 · 콘솔 오류 · 글꼴 로드 · HttpOnly 쿠키 확인 (`scripts/browser-smoke.mjs`)
+- 개발 서버 프록시 `changeOrigin: false` (Host 를 그대로 넘겨 Origin 확인과 맞춤)
 - CI: `permissions: contents: read`, `cargo audit` · `pnpm audit` 잡, Dependabot, `SECURITY.md`(비공개 제보 방법)
 
 ## [0.8.1] - 2026-11-10

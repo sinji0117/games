@@ -13,7 +13,7 @@
   storage/     Redis · MariaDB 어댑터, 결과 보관소
   ratelimit    레이트 리밋 (Redis INCR → 실패 시 메모리)
   events       방 변경 알림 버스 (로컬 broadcast + Redis Pub/Sub room:*)
-  auth         argon2id 비밀번호, Bearer 토큰, MaybeUser/RequireUser 추출기, 포인트 지급
+  auth         argon2id 비밀번호, HttpOnly 로그인 쿠키 · CSRF(Origin) 확인, MaybeUser/RequireUser 추출기, 포인트 지급
   ranking      Redis Sorted Set 캐시 + 원장 폴백
   fairness     커밋-공개 시드, 토큰 생성
         │ 순수 함수 호출

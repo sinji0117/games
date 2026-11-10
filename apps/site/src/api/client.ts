@@ -25,12 +25,6 @@ export class ApiError extends Error {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
-// 로그인 토큰. lib/auth.tsx 가 설정하고, 모든 요청에 Authorization 으로 붙습니다.
-let authToken: string | null = null;
-export function setAuthToken(token: string | null) {
-  authToken = token;
-}
-
 async function request<T>(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
   let res: Response;
   try {
@@ -38,9 +32,10 @@ async function request<T>(method: string, path: string, body?: unknown, headers?
       method,
       headers: {
         "content-type": "application/json",
-        ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
         ...headers,
       },
+      // 로그인은 HttpOnly 쿠키(mg_session)라 스크립트는 토큰을 모르고, 브라우저가 같은 출처 요청에 붙입니다
+      credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
