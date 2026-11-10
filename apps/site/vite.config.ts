@@ -6,7 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": { target: process.env.VITE_API_TARGET ?? "http://localhost:8080", changeOrigin: true, ws: true },
+      // changeOrigin: false — Host 를 그대로 넘겨야 서버의 Origin 확인(CSRF)과 맞음
+      "/api": { target: process.env.VITE_API_TARGET ?? "http://localhost:8080", changeOrigin: false, ws: true },
     },
   },
 });

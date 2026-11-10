@@ -46,6 +46,17 @@ impl Reason {
         }
     }
 
+    /// 하루(KST)에 이 사유로 받을 수 있는 최대 횟수. 같은 계정으로 방을 계속 만들어 랭킹을 올리는 것을 막음
+    pub fn daily_cap(self) -> u32 {
+        match self {
+            Reason::Daily => 1,
+            Reason::BingoPlay => 20,
+            Reason::BingoWin => 10,
+            Reason::LadderHost => 10,
+            Reason::Roulette => 10,
+        }
+    }
+
     /// 화면에 보여줄 이름
     pub fn label(self) -> &'static str {
         match self {
@@ -89,7 +100,10 @@ pub fn validate_username(raw: &str) -> GameResult<String> {
             format!("아이디는 {USERNAME_MIN}~{USERNAME_MAX}자입니다"),
         ));
     }
-    let ok = raw.chars().all(|c| c.is_alphanumeric() || c == '_');
+    // 비슷하게 생긴 다른 문자(키릴 а, 전각 Ａ 등)로 남을 흉내 내지 못하게 완성형 한글 · 영문 · 숫자만
+    let ok = raw
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || ('가'..='힣').contains(&c));
     if !ok {
         return Err(GameError::invalid(
             "username",
@@ -136,6 +150,11 @@ pub fn civil_from_days(z: i64) -> (i64, u32, u32) {
 
 fn kst_days(now: u64) -> i64 {
     (now as i64 + KST_OFFSET).div_euclid(86_400)
+}
+
+/// 그날(KST) 0시의 유닉스 시각
+pub fn kst_day_start(now: u64) -> u64 {
+    (kst_days(now) * 86_400 - KST_OFFSET).max(0) as u64
 }
 
 /// KST 날짜 키 `2026-11-09`
@@ -191,12 +210,26 @@ mod tests {
     }
 
     #[test]
+    fn day_start_is_kst_midnight() {
+        // 2026-11-09 15:00 UTC = 11-10 00:00 KST
+        let midnight = 1_794_236_400;
+        assert_eq!(day_key(midnight), "2026-11-10");
+        assert_eq!(kst_day_start(midnight), midnight);
+        assert_eq!(kst_day_start(midnight + 86_399), midnight);
+        assert_eq!(kst_day_start(midnight - 1), midnight - 86_400);
+    }
+
+    #[test]
     fn usernames() {
         assert_eq!(validate_username("민지_01").unwrap(), "민지_01");
         assert!(validate_username("a").is_err());
         assert!(validate_username(" 민지").is_err());
         assert!(validate_username("민 지").is_err());
         assert!(validate_username("a-b").is_err());
+        assert!(validate_username("аdmin").is_err(), "키릴 а");
+        assert!(validate_username("ＡＢ").is_err(), "전각");
+        assert!(validate_username("ㅁㅈ").is_err(), "낱자모");
+        assert!(validate_username("Minji_7").is_ok());
         assert!(validate_username(&"가".repeat(21)).is_err());
         assert!(validate_password("1234567").is_err());
         assert!(validate_password("12345678").is_ok());

@@ -24,6 +24,13 @@
 | --- | --- |
 | 사다리 생성 | IP 당 20회/분 |
 | 가로선 추가 | IP 당 60회/분 |
+| 빙고 생성 · 참가 · 진행 | IP 당 20 · 30 · 120회/분 |
+| 핀볼 룰렛 생성 | IP 당 30회/분 |
+| 가입 | IP 당 5회/10분 |
+| 로그인 | IP 당 10회/분 + 아이디당 20회/15분 |
+| WebSocket 연결 | IP 당 60회/분, 서버당 동시 5,000개 |
+
+모든 응답에는 보안 헤더(CSP, `X-Frame-Options: DENY` 등)가 붙습니다. 포인트는 사유별 하루 한도가 있습니다 (빙고 참가 20 · 우승 10 · 사다리 공개 10 · 룰렛 10회, KST 기준).
 
 `TRUST_PROXY` 가 켜져 있을 때만 `X-Real-IP`, 없으면 `X-Forwarded-For` 첫 주소를 IP 로 사용합니다. 지정하지 않으면 127.0.0.1 에만 열렸을 때(Rpanel) 자동으로 켜집니다.
 
@@ -186,15 +193,18 @@
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| POST | `/api/auth/signup` | `{ "username", "password" }` → 201 `{ token, expires_at, user }` (409 아이디 중복) |
+| POST | `/api/auth/signup` | `{ "username", "password" }` → 201 `{ expires_at, user }` + 로그인 쿠키 (409 아이디 중복) |
 | POST | `/api/auth/login` | 같은 본문 → 200 같은 응답 (401 틀림) |
-| POST | `/api/auth/logout` | 토큰 무효화 → 204 |
+| POST | `/api/auth/logout` | 세션 삭제 · 쿠키 지움 → 204 |
 | GET | `/api/auth/me` | `{ user, daily_bonus }` — 오늘(KST) 처음 부르면 방문 포인트 지급 |
 
-- 로그인이 필요한 요청은 `Authorization: Bearer <token>`. 토큰은 30일 유효, 서버에는 sha256 해시만 저장
+- 로그인 토큰은 응답 본문에 없고 쿠키로만 옵니다: `mg_session=…; Path=/api; HttpOnly; SameSite=Lax; Max-Age=2592000` (https 면 `Secure`).
+  화면 스크립트는 토큰을 읽을 수 없고, 브라우저가 같은 출처의 `/api` 요청에 붙입니다. 30일 유효, 서버에는 sha256 해시만 저장
+- CSRF 방지: POST · PUT · DELETE 요청의 `Origin`(없으면 `Referer`) 호스트가 `Host` 와 다르면 로그인 쿠키를 무시합니다
+  (가입 · 로그인 · 로그아웃은 403). `Secure` 는 `COOKIE_SECURE` 가 없으면 `X-Forwarded-Proto: https` 로 판단
 - 아이디 2~20자(한글·영문·숫자·밑줄, 대소문자 구분 없이 고유), 비밀번호 8~128자(argon2id)
 - 게임은 로그인 없이도 됩니다. 로그인한 상태로 빙고 방 만들기·참가, 사다리 결과 공개, 핀볼 룰렛 만들기를 하면 포인트가 쌓입니다
-- 레이트 리밋: 가입 IP 당 10분에 5회, 로그인 1분에 10회
+- 레이트 리밋: 가입 IP 당 10분에 5회, 로그인 IP 당 1분에 10회 + 아이디당 15분에 20회
 - `user`: `{ id, username, points, created_at }`
 
 ## 랭킹 — `GET /api/rankings?period=week|all`

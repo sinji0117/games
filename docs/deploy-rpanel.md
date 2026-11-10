@@ -74,6 +74,7 @@ Redis 나 MariaDB 가 잠시 끊겨도 앱은 꺼지지 않습니다 (Redis → 
 | `REDIS_KEY_PREFIX` | `mg:` | Redis 키 · 채널 접두사. Redis 계정의 키 패턴과 맞춤 |
 | `SESSION_TTL_SECS` | `86400` | 게임 방 수명(초) |
 | `TRUST_PROXY` | 127.0.0.1 에 열리면 `true` | Nginx 가 넘긴 `X-Real-IP`(없으면 `X-Forwarded-For` 첫 주소)를 접속 IP 로 씀 |
+| `COOKIE_SECURE` | 자동 | 로그인 쿠키 `Secure`. 비우면 https 로 들어온 요청(`X-Forwarded-Proto`)에만. https 없이 시험할 때도 그대로 두면 됨 |
 | `CORS_ORIGINS` | – | 다른 도메인의 화면에서 API 를 부를 때만 |
 
 > **포트는?** Rpanel 은 `PORT`(와 `BIND_ADDR=127.0.0.1:{PORT}`)를 넣어 줍니다. 앱은 `API_BIND` > `BIND_ADDR` > `127.0.0.1:$PORT` 순으로
@@ -118,6 +119,7 @@ Redis 나 MariaDB 가 잠시 끊겨도 앱은 꺼지지 않습니다 (Redis → 
 | 서비스 로그 `NOPERM` · 빙고가 계속 "자동 새로고침" | Redis 계정의 키 패턴이 `REDIS_KEY_PREFIX` + `*` (기본 `mg:*`) 와 다름 |
 | 서비스 로그 `mariadb 연결 실패` | 데이터베이스 탭에서 MariaDB 만들기. 그 전까지 계정 · 결과가 메모리에만 남음 |
 | 접속하면 502 | 앱이 꺼져 있음 → **서비스 로그** 탭의 마지막 줄이 이유 |
+| 로그인했는데 새로고침하면 풀림 | 브라우저가 쿠키를 버림 → https 가 아닌데 `COOKIE_SECURE=true` 를 넣었는지 확인 (지우면 자동) |
 | 가입이 금방 "요청이 너무 많습니다" | 모든 사람이 같은 IP 로 보임 → `TRUST_PROXY` 를 `false` 로 넣었는지 확인 (지우면 자동) |
 
 ## 운영 참고
@@ -127,6 +129,9 @@ Redis 나 MariaDB 가 잠시 끊겨도 앱은 꺼지지 않습니다 (Redis → 
   끊겨도 화면은 폴링으로 바뀌어 계속 동작합니다.
 - **실제 IP**: 레이트 리밋에 Rpanel Nginx 가 넘겨 주는 `X-Real-IP` 를 씁니다. 앞에 다른 프록시(Cloudflare 등)를 둔다면
   Rpanel 의 신뢰 프록시 설정을 맞춰야 방문자 IP 가 제대로 들어옵니다.
+- **보안 헤더**: 앱이 CSP · `X-Frame-Options` 등을 직접 붙이므로 Rpanel 앱 설정의 **CSP 는 비워 두세요** (둘 다 있으면 둘을 모두 만족해야 해서 화면이 깨질 수 있음).
+  https 를 붙인 뒤에는 앱 설정에서 **HTTPS 강제**를 켜면 Rpanel 이 HSTS 를 붙입니다.
+- **보안 제보**: [SECURITY.md](../SECURITY.md)
 - **업데이트**: 개발 쪽에서 `python3 scripts/bump-version.py X.Y.Z` → CHANGELOG → PR 병합 → (Webhook) 자동 배포.
   새 마이그레이션은 앱이 켜질 때 자동 적용됩니다. 적용된 마이그레이션 파일은 고치지 않습니다.
 

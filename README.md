@@ -6,7 +6,7 @@
 [![db](https://img.shields.io/badge/DB-MariaDB%20%C2%B7%20Redis-c0765a?logo=mariadb&logoColor=white)](docs/architecture.md)
 [![deploy](https://img.shields.io/badge/deploy-Rpanel%20%C2%B7%20Docker-2496ed)](#설치하기)
 [![CI](https://github.com/sinji0117/games/actions/workflows/ci.yml/badge.svg)](https://github.com/sinji0117/games/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.8.1-brightgreen)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.8.2-brightgreen)](CHANGELOG.md)
 [![stars](https://img.shields.io/github/stars/sinji0117/games?label=stars&color=yellow)](https://github.com/sinji0117/games/stargazers)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%ED%9B%84%EC%9B%90%ED%95%98%EA%B8%B0-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/bandiuri)
 
@@ -29,7 +29,7 @@
   - 방장이 링크를 나눠 주면 참가자들이 **가로선을 직접 더 그을** 수 있습니다.
   - 이름을 누르면 그 사람의 길을 따라 내려가는 애니메이션이 나옵니다.
 - **빙고 게임**: 방을 만들고 링크로 최대 30명이 함께합니다.
-  - 3×3 ~ 7×7 판, **숫자** 또는 방장이 정한 **단어** 빙고. 판은 사람마다 무작위로 받습니다.
+  - 3×3 ~ 7×7 판, **숫자** 또는 방장이 정한 **단어** 빙고. 판은 무작위로 받거나 직접 배치합니다.
   - 방장이 **"다음 번호"** 를 눌러 서버가 섞어 둔 순서대로 뽑거나, 참가자가 **돌아가며 부르는** 방식 중에서 고릅니다.
   - 완성한 줄 수(가로 · 세로 · 대각선)를 실시간으로 세고, 정한 줄 수를 먼저 채운 사람이 이깁니다 (동시에 채우면 공동 우승).
 - **핀볼 룰렛**: 이름을 적으면 이름마다 구슬이 굴러 떨어지는 마블 룰렛입니다.
@@ -149,6 +149,10 @@ python3 scripts/bump-version.py X.Y.Z   # 버전은 이 스크립트로만 바�
 게임 엔진을 고쳤다면 Rust 쪽 기준값(`cargo run -p game-core --example …_fixtures`)도 다시 만들어 TS 테스트와 맞춰야 합니다. 자세한 규칙은 [코딩 · 버전 규칙](docs/conventions.md).
 
 버전별로 바뀐 점은 [변경 내역](CHANGELOG.md)을 보세요.
+
+## 보안
+
+취약점은 공개 이슈 대신 [비공개 제보](https://github.com/sinji0117/games/security/advisories/new)로 알려 주세요. 자세한 내용은 [SECURITY.md](SECURITY.md).
 
 ## 라이선스
 

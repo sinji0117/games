@@ -2,6 +2,37 @@
  * 공용 디자인 토큰 — 모든 앱은 이 변수만 사용합니다.
  * 라이트: 모눈 공책 + 볼펜 + 형광펜 / 다크: 칠판 + 분필
  */
+
+/* 글꼴은 직접 서빙 (방문자 IP 가 외부 글꼴 서버로 가지 않음). KS X 1001 한글 2,350자 + 영문 · 기호만 담은 부분 글꼴.
+ * 그 밖의 글자는 시스템 글꼴로 보입니다. 다시 만드는 법은 fonts/README.md */
+@font-face {
+  font-family: "Jua";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/Jua-Regular.woff") format("woff");
+}
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-Regular.woff") format("woff");
+}
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-Medium.woff") format("woff");
+}
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-Bold.woff") format("woff");
+}
 :root {
   --c-bg: #edf2ea;
   --c-grid: #d9e3d5;

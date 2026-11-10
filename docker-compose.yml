@@ -8,7 +8,7 @@ services:
       MARIADB_PASSWORD: games
       MARIADB_ROOT_PASSWORD: games-root
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"   # 개발용 비밀번호라 이 컴퓨터에서만
     volumes:
       - mariadb-data:/var/lib/mysql
     healthcheck:
@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"   # 비밀번호 없는 개발용 Redis 라 이 컴퓨터에서만
     volumes:
       - redis-data:/data
     healthcheck:

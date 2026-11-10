@@ -7,6 +7,7 @@
 //!
 //! 클라이언트가 보내는 메시지는 무시합니다(닫기만 처리). 25초마다 Ping 을 보냅니다.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -19,10 +20,40 @@ use game_core::game_common::GameKind;
 use tokio::sync::broadcast::error::RecvError;
 use uuid::Uuid;
 
+use crate::client_ip::ClientIp;
+use crate::error::ApiError;
 use crate::events::RoomEvent;
+use crate::ratelimit::WS_CONNECT;
+use crate::state::now_secs;
 use crate::AppState;
 
 const PING_EVERY: Duration = Duration::from_secs(25);
+/// 서버 하나가 동시에 여는 연결 수 상한 (메모리 보호)
+const MAX_CONNECTIONS: usize = 5_000;
+/// 클라이언트가 보내는 메시지는 쓰지 않으므로 아주 작게 (기본 64MB)
+const MAX_MESSAGE_BYTES: usize = 1024;
+
+static OPEN: AtomicUsize = AtomicUsize::new(0);
+
+/// 연결이 끝나면 (어떤 이유로든) 수를 줄임
+struct Slot;
+
+impl Slot {
+    fn take() -> Option<Self> {
+        // 먼저 늘리고 넘쳤으면 되돌림 (툴체인 버전에 따라 이름이 바뀐 fetch_update 를 피함)
+        if OPEN.fetch_add(1, Ordering::AcqRel) >= MAX_CONNECTIONS {
+            OPEN.fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(Slot)
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        OPEN.fetch_sub(1, Ordering::AcqRel);
+    }
+}
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/{game}/{id}", get(upgrade))
@@ -30,14 +61,27 @@ pub fn router() -> Router<AppState> {
 
 async fn upgrade(
     State(st): State<AppState>,
+    ip: ClientIp,
     Path((game, id)): Path<(String, Uuid)>,
     ws: WebSocketUpgrade,
 ) -> Response {
     let Some(game) = GameKind::parse(&game) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    if let Err(e) = st.limiter.check(&WS_CONNECT, &ip.0, now_secs()).await {
+        return e.into_response();
+    }
+    let Some(slot) = Slot::take() else {
+        // 화면은 연결이 안 되면 폴링으로 바뀜
+        return ApiError::RateLimited { retry_after: 30 }.into_response();
+    };
     let rx = st.events.subscribe();
-    ws.on_upgrade(move |socket| pump(socket, rx, game, id.to_string()))
+    ws.max_message_size(MAX_MESSAGE_BYTES)
+        .max_frame_size(MAX_MESSAGE_BYTES)
+        .on_upgrade(move |socket| async move {
+            let _slot = slot;
+            pump(socket, rx, game, id.to_string()).await
+        })
 }
 
 async fn send_json(socket: &mut WebSocket, value: &serde_json::Value) -> bool {

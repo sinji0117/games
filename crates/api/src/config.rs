@@ -13,6 +13,8 @@ pub struct Config {
     pub session_ttl_secs: u64,
     /// 리버스 프록시가 넘긴 X-Real-IP / X-Forwarded-For 를 신뢰할지
     pub trust_proxy: bool,
+    /// 로그인 쿠키 Secure: `COOKIE_SECURE=true|false`, 비우면 자동 (X-Forwarded-Proto 가 https 일 때)
+    pub cookie_secure: Option<bool>,
     /// 프론트엔드 빌드 경로. 지정하면 바이너리에 내장된 화면 대신 이 폴더를 서빙 (Docker 이미지 등)
     pub static_dir: Option<String>,
 }
@@ -61,6 +63,11 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .filter(|&v| v > 0)
                 .unwrap_or(DEFAULT_SESSION_TTL_SECS),
+            cookie_secure: get("COOKIE_SECURE").and_then(|v| match v.trim().to_ascii_lowercase().as_str() {
+                "1" | "true" | "yes" | "on" => Some(true),
+                "0" | "false" | "no" | "off" => Some(false),
+                _ => None,
+            }),
             static_dir: get("STATIC_DIR"),
         }
     }
@@ -75,6 +82,7 @@ impl Config {
             redis_key_prefix: DEFAULT_KEY_PREFIX.into(),
             session_ttl_secs: DEFAULT_SESSION_TTL_SECS,
             trust_proxy: false,
+            cookie_secure: None,
             static_dir: None,
         }
     }

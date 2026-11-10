@@ -13,6 +13,9 @@ pub const BINGO_ACTION: Rule = Rule::new("bingo_action", 120, 60);
 pub const PINBALL_CREATE: Rule = Rule::new("pinball_create", 30, 60);
 pub const AUTH_SIGNUP: Rule = Rule::new("auth_signup", 5, 600);
 pub const AUTH_LOGIN: Rule = Rule::new("auth_login", 10, 60);
+/// 아이디 하나에 대한 로그인 시도 (여러 IP 에서 나눠 하는 비밀번호 대입 방지)
+pub const AUTH_LOGIN_ACCOUNT: Rule = Rule::new("auth_login_acct", 20, 900);
+pub const WS_CONNECT: Rule = Rule::new("ws_connect", 60, 60);
 
 pub struct Limiter {
     redis: Option<RedisBackend>,

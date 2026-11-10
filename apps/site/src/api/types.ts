@@ -137,8 +137,8 @@ export interface User {
   created_at: number;
 }
 
+/** 로그인 결과. 토큰은 HttpOnly 쿠키로만 옴 */
 export interface SessionView {
-  token: string;
   expires_at: number;
   user: User;
 }

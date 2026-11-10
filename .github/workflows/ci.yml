@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# 이 워크플로는 코드를 읽기만 함 (PR 에서 온 코드에 쓰기 권한을 주지 않음)
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -58,6 +62,32 @@ jobs:
       - name: pnpm-lock.yaml 출력 (로그에서 꺼내 커밋하기 위함)
         run: echo "LOCKFILE pnpm $(gzip -9c pnpm-lock.yaml | base64 -w0)"
 
+  audit:
+    name: 의존성 보안 점검
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: cargo audit (RustSec 취약점 DB)
+        # RUSTSEC-2023-0071: sqlx-mysql 이 쓰는 rsa 의 타이밍 공격(Marvin). 고친 버전이 없고,
+        # RSA 는 TLS 없이 caching_sha2 비밀번호를 보낼 때만 쓰임 — DB 는 127.0.0.1 로만 접속하므로 무시
+        # RUSTSEC-2026-0459: libsqlite3-sys(SQLite). sqlx 가 잠금 파일에만 적어 둔 것으로 실제로는 빌드하지 않음 (아래 단계에서 확인)
+        run: cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0459
+      - name: SQLite 가 실제 빌드에 들어가지 않는지
+        run: |
+          if cargo tree -p game-api -e normal,build -i libsqlite3-sys 2>/dev/null | grep -q libsqlite3-sys; then
+            echo "::error::libsqlite3-sys 가 빌드에 들어갑니다 — RUSTSEC-2026-0459 무시를 지우고 sqlx 를 올리세요"; exit 1
+          fi
+          echo "libsqlite3-sys 는 빌드에 없음"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: pnpm audit (운영 의존성, high 이상)
+        run: pnpm audit --prod --audit-level high
+
   release:
     name: Rpanel 빌드 스크립트 · 실행 확인
     runs-on: ubuntu-latest
@@ -84,12 +114,18 @@ jobs:
           curl -fsS http://127.0.0.1:4100/api/health/deps | tee /dev/stderr | grep -q '"db":false'
           curl -fsS http://127.0.0.1:4100/ | grep -q '<div id="root">'
           curl -fsSI http://127.0.0.1:4100/ | grep -qi 'cache-control: no-cache'
+          curl -fsSI http://127.0.0.1:4100/ | grep -qi "content-security-policy: default-src 'self'"
+          curl -fsSI http://127.0.0.1:4100/api/health | grep -qi 'x-frame-options: DENY'
           asset=$(curl -fsS http://127.0.0.1:4100/ | grep -o '/assets/[^"]*\.js' | head -1)
           curl -fsSI "http://127.0.0.1:4100$asset" | grep -qi 'immutable'
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4100/api/nope)" = 404
           # 루프백에만 열렸는지
           ! curl -fsS --max-time 2 "http://$(hostname -I | awk '{print $1}'):4100/api/health" > /dev/null 2>&1
-          cat server.log
+      - name: 실제 브라우저로 화면 확인 (CSP · 글꼴 · 쿠키)
+        run: node scripts/browser-smoke.mjs http://127.0.0.1:4100
+      - name: 서버 로그
+        if: always()
+        run: cat server.log
 
   docker:
     name: Docker 이미지 빌드

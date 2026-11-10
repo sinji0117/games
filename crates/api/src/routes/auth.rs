@@ -1,17 +1,21 @@
 //! 계정 엔드포인트: 가입 · 로그인 · 로그아웃 · 내 정보
 
 use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{header, HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use game_core::points::{day_key, validate_password, validate_username, Reason};
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{award, hash_password, verify_password, RequireUser, SESSION_TTL_SECS};
+use crate::auth::{
+    award, clear_cookie, cross_site, hash_password, is_https, session_cookie, set_cookie, verify_password,
+    RequireUser, SESSION_TTL_SECS,
+};
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, ApiResult};
 use crate::fairness::{hash_token, random_token};
-use crate::ratelimit::{AUTH_LOGIN, AUTH_SIGNUP};
+use crate::ratelimit::{AUTH_LOGIN, AUTH_LOGIN_ACCOUNT, AUTH_SIGNUP};
 use crate::state::now_secs;
 use crate::storage::accounts::{CreateUserError, User};
 use crate::AppState;
@@ -30,10 +34,9 @@ pub struct Credentials {
     pub password: String,
 }
 
+/// 로그인 결과. 토큰은 본문에 넣지 않고 HttpOnly 쿠키로만 보냅니다.
 #[derive(Debug, Serialize)]
 pub struct SessionView {
-    /// `Authorization: Bearer <token>` 으로 보내세요. 서버에는 해시만 저장됩니다.
-    pub token: String,
     pub expires_at: u64,
     pub user: User,
 }
@@ -45,25 +48,38 @@ pub struct MeView {
     pub daily_bonus: Option<i64>,
 }
 
-async fn issue(st: &AppState, user: User) -> ApiResult<SessionView> {
+/// 로그인 세션을 만들고 본문과 쿠키를 함께 돌려줌
+async fn issue(st: &AppState, headers: &HeaderMap, status: StatusCode, user: User) -> ApiResult<Response> {
     let token = random_token();
     let now = now_secs();
     let expires_at = now + SESSION_TTL_SECS;
     st.accounts
         .create_session(&hash_token(&token), user.id, now, expires_at)
         .await?;
-    Ok(SessionView {
-        token,
-        expires_at,
-        user,
-    })
+    let cookie = set_cookie(&token, SESSION_TTL_SECS, is_https(st, headers));
+    Ok((
+        status,
+        [(header::SET_COOKIE, cookie)],
+        Json(SessionView { expires_at, user }),
+    )
+        .into_response())
+}
+
+/// 다른 사이트에서 보낸 가입 · 로그인 · 로그아웃은 받지 않음 (로그인 CSRF 방지)
+fn same_site(headers: &HeaderMap) -> ApiResult<()> {
+    if cross_site(&axum::http::Method::POST, headers) {
+        return Err(ApiError::Forbidden("이 사이트에서만 할 수 있습니다".into()));
+    }
+    Ok(())
 }
 
 async fn signup(
     State(st): State<AppState>,
     ip: ClientIp,
+    headers: HeaderMap,
     Json(req): Json<Credentials>,
-) -> ApiResult<(StatusCode, Json<SessionView>)> {
+) -> ApiResult<Response> {
+    same_site(&headers)?;
     st.limiter.check(&AUTH_SIGNUP, &ip.0, now_secs()).await?;
     let username = validate_username(&req.username)?;
     validate_password(&req.password)?;
@@ -73,39 +89,45 @@ async fn signup(
         Err(CreateUserError::Taken) => return Err(ApiError::Conflict("이미 쓰고 있는 아이디입니다".into())),
         Err(CreateUserError::Store(e)) => return Err(e.into()),
     };
-    Ok((StatusCode::CREATED, Json(issue(&st, user).await?)))
+    issue(&st, &headers, StatusCode::CREATED, user).await
 }
 
 async fn login(
     State(st): State<AppState>,
     ip: ClientIp,
+    headers: HeaderMap,
     Json(req): Json<Credentials>,
-) -> ApiResult<Json<SessionView>> {
+) -> ApiResult<Response> {
+    same_site(&headers)?;
     st.limiter.check(&AUTH_LOGIN, &ip.0, now_secs()).await?;
     let wrong = || ApiError::Unauthorized("아이디나 비밀번호가 맞지 않습니다".into());
     if req.password.chars().count() > game_core::points::PASSWORD_MAX {
         return Err(wrong());
     }
+    // 아이디를 키에 그대로 넣지 않도록 해시 앞부분만 사용
+    let account_key = hash_token(&req.username.trim().to_lowercase())[..16].to_string();
+    st.limiter
+        .check(&AUTH_LOGIN_ACCOUNT, &account_key, now_secs())
+        .await?;
     let Some((user, hash)) = st.accounts.find_login(req.username.trim()).await? else {
         return Err(wrong());
     };
     if !verify_password(req.password, hash).await? {
         return Err(wrong());
     }
-    Ok(Json(issue(&st, user).await?))
+    issue(&st, &headers, StatusCode::OK, user).await
 }
 
-async fn logout(State(st): State<AppState>, headers: HeaderMap) -> ApiResult<StatusCode> {
-    let token = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(str::trim)
-        .unwrap_or("");
-    if !token.is_empty() {
+async fn logout(State(st): State<AppState>, headers: HeaderMap) -> ApiResult<Response> {
+    same_site(&headers)?;
+    if let Some(token) = session_cookie(&headers) {
         st.accounts.delete_session(&hash_token(token)).await?;
     }
-    Ok(StatusCode::NO_CONTENT)
+    Ok((
+        StatusCode::NO_CONTENT,
+        [(header::SET_COOKIE, clear_cookie(is_https(&st, &headers)))],
+    )
+        .into_response())
 }
 
 /// 내 정보. 오늘(KST) 처음 부르면 방문 포인트를 지급합니다.
