@@ -73,7 +73,14 @@ jobs:
       - name: cargo audit (RustSec 취약점 DB)
         # RUSTSEC-2023-0071: sqlx-mysql 이 쓰는 rsa 의 타이밍 공격(Marvin). 고친 버전이 없고,
         # RSA 는 TLS 없이 caching_sha2 비밀번호를 보낼 때만 쓰임 — DB 는 127.0.0.1 로만 접속하므로 무시
-        run: cargo audit --ignore RUSTSEC-2023-0071
+        # RUSTSEC-2026-0459: libsqlite3-sys(SQLite). sqlx 가 잠금 파일에만 적어 둔 것으로 실제로는 빌드하지 않음 (아래 단계에서 확인)
+        run: cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0459
+      - name: SQLite 가 실제 빌드에 들어가지 않는지
+        run: |
+          if cargo tree -p game-api -e normal,build -i libsqlite3-sys 2>/dev/null | grep -q libsqlite3-sys; then
+            echo "::error::libsqlite3-sys 가 빌드에 들어갑니다 — RUSTSEC-2026-0459 무시를 지우고 sqlx 를 올리세요"; exit 1
+          fi
+          echo "libsqlite3-sys 는 빌드에 없음
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
