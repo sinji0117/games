@@ -3,9 +3,11 @@ resolver = "2"
 members = ["crates/core", "crates/api"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
-license = "UNLICENSED"
+license = "MIT"
+authors = ["sinji0117"]
+repository = "https://github.com/sinji0117/games"
 publish = false
 
 [workspace.dependencies]

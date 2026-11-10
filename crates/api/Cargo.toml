@@ -3,6 +3,8 @@ name = "game-api"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish.workspace = true
 description = "미니게임 플랫폼 API 서버 (Axum)"
 
